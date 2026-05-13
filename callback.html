@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>MotoPlay · Spotify Auth</title>
+<script src="config.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#030303;color:#E2DCD4;font-family:'Helvetica Neue',sans-serif;
+    display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:14px}
+  .spin{width:28px;height:28px;border:2px solid #1a1a1a;border-top-color:#C8102E;
+    border-radius:50%;animation:s .7s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .msg{font-size:10px;letter-spacing:.25em;opacity:.4;text-transform:uppercase}
+  .err{color:#C8102E;font-size:11px;letter-spacing:.1em;text-align:center;max-width:320px;line-height:1.7}
+  .hint{font-size:10px;color:#5E5850;letter-spacing:.08em;max-width:320px;text-align:center;line-height:1.8}
+  a{color:#C8102E;text-decoration:none}
+  .ok{color:#44D478;font-size:12px;letter-spacing:.2em}
+</style>
+</head>
+<body>
+<div class="spin" id="spin"></div>
+<p class="msg" id="msg">COLLEGAMENTO SPOTIFY...</p>
+
+<script>
+(async () => {
+  const p     = new URLSearchParams(window.location.search);
+  const code  = p.get('code');
+  const error = p.get('error');
+
+  function show(html) {
+    document.getElementById('spin').remove();
+    document.getElementById('msg').remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  // Errore OAuth diretto da Spotify
+  if (error) {
+    show(`<p class="err">Spotify ha risposto: <b>${error}</b></p>
+          <p class="hint">Verifica che il Redirect URI nel dashboard Spotify sia esattamente:<br>
+          <b>http://localhost:8000/callback.html</b></p>
+          <p style="margin-top:12px"><a href="/">← Torna a MotoPlay</a></p>`);
+    return;
+  }
+
+  if (!code) {
+    show(`<p class="err">Nessun codice ricevuto da Spotify.</p>
+          <p style="margin-top:10px"><a href="/">← Riprova</a></p>`);
+    return;
+  }
+
+  // Chiave verifier — deve corrispondere a quello in index.html (sp_ver)
+  const verifier = localStorage.getItem('sp_ver');
+  if (!verifier) {
+    show(`<p class="err">Sessione scaduta — il verifier PKCE non è stato trovato.</p>
+          <p class="hint">Prova a disconnettere e ricollegare Spotify da MotoPlay.</p>
+          <p style="margin-top:10px"><a href="/">← Torna a MotoPlay</a></p>`);
+    return;
+  }
+
+  const cfg = window.MOTOPLAY;
+  if (!cfg?.SPOTIFY_CLIENT_ID) {
+    show(`<p class="err">SPOTIFY_CLIENT_ID mancante in config.js</p>
+          <p style="margin-top:10px"><a href="/">← Torna a MotoPlay</a></p>`);
+    return;
+  }
+
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type:    'authorization_code',
+        code,
+        redirect_uri:  cfg.REDIRECT_URI,
+        client_id:     cfg.SPOTIFY_CLIENT_ID,
+        code_verifier: verifier,
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      let hint = '';
+      if (txt.includes('redirect_uri'))
+        hint = '<p class="hint">Redirect URI mismatch — nel dashboard Spotify deve essere esattamente:<br><b>http://localhost:8000/callback.html</b></p>';
+      else if (txt.includes('invalid_client'))
+        hint = '<p class="hint">Client ID errato — ricontrolla config.js</p>';
+      throw Object.assign(new Error(txt), { hint });
+    }
+
+    const data = await res.json();
+    // Chiavi consistenti con index.html
+    localStorage.setItem('sp_token',   data.access_token);
+    localStorage.setItem('sp_refresh', data.refresh_token);
+    localStorage.setItem('sp_exp',     Date.now() + data.expires_in * 1000);
+    localStorage.removeItem('sp_ver');
+
+    show(`<p class="ok">CONNESSO ✓</p>`);
+    setTimeout(() => { window.location.href = '/'; }, 700);
+
+  } catch (e) {
+    show(`<p class="err">Errore token: ${e.message.slice(0,200)}</p>
+          ${e.hint || ''}
+          <p style="margin-top:12px"><a href="/">← Torna a MotoPlay</a></p>`);
+  }
+})();
+</script>
+</body>
+</html>

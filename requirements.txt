@@ -1,0 +1,5 @@
+aiohttp>=3.9
+# Solo Raspberry Pi:
+# pyserial>=3.5
+# gpsd-py3>=0.3
+# dbus-python>=1.3

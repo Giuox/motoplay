@@ -1,0 +1,31 @@
+# API keys — mai committare
+config.js
+
+# Python
+__pycache__/
+*.pyc
+.env
+*.log
+
+# Node
+node_modules/
+
+# Binari scaricati dal setup
+caddy.exe
+winsw.exe
+nssm.exe
+MotoPlay.exe
+MotoPlayCaddy.exe
+*.xml
+
+# macOS
+.DS_Store
+
+# Icone PWA (rigenerabili con create_icons.py)
+assets/icon-*.png
+
+# Brainstorming
+.superpowers/
+
+# Log
+logs/

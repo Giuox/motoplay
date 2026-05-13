@@ -1,0 +1,13 @@
+{
+  "name": "motoplay",
+  "version": "0.1.0",
+  "description": "Connected Ride System per Moto Guzzi",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "start": "python server.py"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

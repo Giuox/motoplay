@@ -1,0 +1,2403 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MotoPlay</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#C8102E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MotoPlay">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+<script src="config.js"></script>
+<!-- Preconnect CDN (non blocca render) -->
+<link rel="preconnect" href="https://api.mapbox.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="dns-prefetch" href="https://sdk.scdn.co">
+<!-- Google Fonts: non blocca render grazie a display=swap -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=Syne:wght@400;700;800&family=Roboto+Mono:wght@300;400&display=swap" rel="stylesheet">
+<!-- Mapbox e Lucide rimossi dall'head — caricati lazy quando servono -->
+
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --bg:       #030303;
+  --s1:       rgba(255,255,255,.04);
+  --s2:       rgba(255,255,255,.07);
+  --s3:       rgba(255,255,255,.11);
+  --line:     rgba(255,255,255,.06);
+  --accent:   #C8102E;
+  --accent-g: rgba(200,16,46,.22);
+  --text:     #E2DCD4;
+  --text2:    #5E5850;
+  --text3:    #282420;
+  --green:    #1E6B3E;
+  --green2:   #44D478;
+  --blue:     #1040A0;
+  --blue2:    #5AB4FF;
+  --fd:'Barlow Condensed',sans-serif;
+  --fs:'Syne',sans-serif;
+  --fm:'Roboto Mono',monospace;
+}
+
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--fd)}
+/* iOS safe area */
+#bar{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right));padding-top:env(safe-area-inset-top);height:calc(44px + env(safe-area-inset-top))}
+#dock{padding-bottom:env(safe-area-inset-bottom);height:calc(66px + env(safe-area-inset-bottom))}
+
+/* grain */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+  opacity:.04;mix-blend-mode:overlay
+}
+
+/* ━━━━━━━━━━━━━━━━━━━ SPLASH ━━━━━━━━━━━━━━━━━━━ */
+#splash{
+  position:fixed;inset:0;z-index:200;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+  background:var(--bg);transition:opacity .9s ease
+}
+#splash.out{opacity:0;pointer-events:none}
+
+.sp-wordrow{
+  display:flex;gap:.08em;
+  font-family:var(--fd);font-weight:900;font-size:clamp(42px,8vw,72px);
+  letter-spacing:.12em;text-transform:uppercase;line-height:1
+}
+.sp-gap{width:.5em}
+.sp-letter{
+  display:inline-block;clip-path:inset(0 0 100% 0);
+  animation:slUp .55s cubic-bezier(.16,1,.3,1) forwards;
+  opacity:0;
+}
+@keyframes slUp{to{clip-path:inset(0 0 -10% 0);opacity:1}}
+
+.sp-divider{
+  width:0;height:1px;margin:22px 0;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  animation:growLine .6s ease forwards;
+}
+@keyframes growLine{to{width:200px}}
+
+.sp-sub{
+  font-family:var(--fd);font-weight:300;font-size:13px;
+  letter-spacing:.45em;color:var(--text2);text-transform:uppercase;
+  opacity:0;animation:fadeUp .5s ease forwards;
+}
+.sp-tagline{
+  font-family:var(--fd);font-weight:700;font-size:28px;
+  letter-spacing:.18em;color:var(--accent);text-transform:uppercase;
+  opacity:0;animation:fadeUp .5s ease forwards;margin-top:6px;line-height:1
+}
+@keyframes fadeUp{to{opacity:1}}
+
+/* ━━━━━━━━━━━━━━━━━━━ SHELL ━━━━━━━━━━━━━━━━━━━ */
+#app{display:flex;flex-direction:column;height:100vh;opacity:0;transition:opacity .7s}
+#app.show{opacity:1}
+
+/* ━━━━━━━━━━━━━━━━━━━ STATUS BAR ━━━━━━━━━━━━━━━━━━━ */
+#bar{
+  height:44px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;position:relative;
+  background:rgba(3,3,3,.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.bar-t{font-family:var(--fm);font-weight:400;font-size:17px;letter-spacing:.04em;color:var(--text)}
+.bar-c{display:flex;gap:6px;align-items:center}
+.ind{
+  display:flex;align-items:center;gap:5px;padding:3px 9px;
+  border-radius:20px;font-family:var(--fd);font-weight:700;
+  font-size:9px;letter-spacing:.12em;cursor:pointer;transition:all .3s;
+  user-select:none
+}
+.ind-ph{background:rgba(68,212,120,.06);border:1px solid rgba(68,212,120,.18);color:var(--green2)}
+.ind-ph .d{background:var(--green2);box-shadow:0 0 6px var(--green2)}
+.ind-bt{background:rgba(90,180,255,.06);border:1px solid rgba(90,180,255,.18);color:var(--blue2)}
+.ind-bt .d{background:var(--blue2);box-shadow:0 0 6px var(--blue2)}
+.ind.off{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.06);color:var(--text2)}
+.ind.off .d{background:var(--text3);box-shadow:none}
+.d{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.bar-logo{
+  font-family:var(--fd);font-weight:900;font-size:15px;letter-spacing:.22em;
+  color:var(--accent);text-shadow:0 0 18px var(--accent-g)
+}
+
+/* ━━━━━━━━━━━━━━━━━━━ SETUP BANNER ━━━━━━━━━━━━━━━━━━━ */
+#banner{
+  background:#110900;border-bottom:1px solid #2a1800;
+  padding:7px 20px;font-size:10px;letter-spacing:.1em;color:#b87a00;
+  font-family:var(--fd);font-weight:700;display:none;gap:8px;align-items:center;flex-shrink:0
+}
+#banner a{color:var(--accent);text-decoration:none}
+
+/* ━━━━━━━━━━━━━━━━━━━ AREA ━━━━━━━━━━━━━━━━━━━ */
+#area{flex:1;position:relative;overflow:hidden;min-height:0}
+
+.view{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;padding:18px 18px 14px;
+  opacity:0;transform:translateY(4px);pointer-events:none;
+  transition:opacity .22s ease,transform .22s ease
+}
+.view.on{opacity:1;transform:none;pointer-events:all}
+.vtag{
+  font-family:var(--fd);font-weight:700;font-size:9px;
+  letter-spacing:.35em;color:var(--text2);margin-bottom:14px;text-transform:uppercase
+}
+
+/* glass card */
+.gc{
+  background:var(--s1);border:1px solid var(--line);
+  border-radius:12px;backdrop-filter:blur(16px)
+}
+
+/* ━━━━━━━━━━━━━━━━━━━ MAPS — full bleed ━━━━━━━━━━━━━━━━━━━ */
+#v-maps{padding:0;background:#020602}
+
+#mapbox-container{position:absolute;inset:0}
+#map-placeholder{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;
+  background:radial-gradient(ellipse at 40% 40%,#0b1a0c,#020602)
+}
+#map-placeholder p{font-family:var(--fd);font-size:11px;letter-spacing:.1em;color:var(--text2);text-align:center;line-height:1.7}
+#map-placeholder a{font-size:10px;color:var(--accent);letter-spacing:.08em}
+
+.map-top{
+  position:absolute;top:14px;left:14px;right:14px;z-index:10;
+  display:flex;align-items:center;gap:12px;padding:12px 14px;
+}
+.m-arr{
+  width:46px;height:46px;flex-shrink:0;background:var(--green);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(68,212,120,.18);box-shadow:0 0 20px rgba(68,212,120,.12)
+}
+.m-arr svg{width:22px;height:22px;stroke:var(--green2);stroke-width:2.5}
+.m-info h2{font-family:var(--fs);font-weight:700;font-size:18px;line-height:1;color:var(--text)}
+.m-info p{font-size:11px;color:var(--text2);margin-top:3px;font-family:var(--fd)}
+.m-dist{font-family:var(--fm);font-weight:400;font-size:26px;color:var(--green2);line-height:1;white-space:nowrap}
+.m-dist small{font-size:10px;color:var(--text2);margin-left:2px}
+
+.map-bot{
+  position:absolute;bottom:14px;left:14px;right:14px;z-index:10;
+  display:flex;gap:8px;padding:10px 14px
+}
+.m-stat{flex:1;text-align:center}
+.m-stat small{
+  font-family:var(--fd);font-weight:700;font-size:8px;
+  letter-spacing:.2em;color:var(--text2);display:block;margin-bottom:3px
+}
+.m-stat strong{font-family:var(--fm);font-weight:300;font-size:20px;color:var(--text);line-height:1}
+.map-sep{width:1px;background:var(--line);flex-shrink:0}
+
+.mapboxgl-ctrl-attrib,.mapboxgl-ctrl-logo{display:none!important}
+
+/* pin pulse */
+.pin-ring{
+  position:absolute;width:28px;height:28px;border-radius:50%;
+  border:1px solid rgba(200,16,46,.4);
+  top:50%;left:40%;transform:translate(-50%,-50%);
+  animation:pinPulse 2.4s ease-in-out infinite
+}
+@keyframes pinPulse{0%,100%{opacity:.5;transform:translate(-50%,-50%) scale(1)}50%{opacity:0;transform:translate(-50%,-50%) scale(2.4)}}
+.pin-dot{
+  position:absolute;width:11px;height:11px;border-radius:50%;
+  background:var(--accent);border:2px solid white;
+  box-shadow:0 0 0 4px var(--accent-g);
+  top:50%;left:40%;transform:translate(-50%,-50%)
+}
+
+/* ━━━━━━━━━━━━━━━━━━━ MUSIC ━━━━━━━━━━━━━━━━━━━ */
+#v-music{
+  align-items:center;justify-content:center;gap:0;
+  transition:background 1s ease
+}
+
+/* connect screen */
+#sp-connect{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+#sp-connect p{font-size:12px;color:var(--text2);max-width:220px;line-height:1.7;font-family:var(--fd);font-weight:400;letter-spacing:.03em}
+.sp-btn{
+  display:flex;align-items:center;gap:9px;background:#1DB954;border:none;
+  border-radius:24px;padding:11px 22px;color:white;font-family:var(--fd);
+  font-weight:700;font-size:13px;letter-spacing:.1em;cursor:pointer;transition:all .15s
+}
+.sp-btn:hover{background:#22d160;transform:scale(1.02)}
+.sp-btn svg{width:18px;height:18px;fill:white}
+.sp-note{font-size:9px;color:var(--text2);letter-spacing:.1em;font-family:var(--fd);font-weight:600}
+
+/* player */
+#sp-player{display:none;flex-direction:column;align-items:center;width:100%}
+
+.art-wrap{
+  position:relative;width:150px;height:150px;border-radius:18px;margin-bottom:20px;
+  box-shadow:0 16px 56px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06)
+}
+.art-bg{
+  width:100%;height:100%;border-radius:18px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#180408,#6B0A14 55%,#C8102E 85%,#800)
+}
+.art-bg svg{width:52px;height:52px;stroke:rgba(255,255,255,.3);stroke-width:1.5;fill:none}
+.art-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:18px;display:none}
+
+.now-title{
+  font-family:var(--fs);font-weight:800;font-size:22px;
+  color:var(--text);text-align:center;line-height:1.1;margin-bottom:4px;
+  max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.now-artist{
+  font-family:var(--fd);font-size:12px;letter-spacing:.08em;
+  color:var(--text2);margin-bottom:20px;text-align:center
+}
+
+.prog{width:100%;max-width:290px;margin-bottom:20px;cursor:pointer}
+.prog-bg{height:2px;background:rgba(255,255,255,.1);border-radius:1px;position:relative;margin-bottom:6px}
+.prog-fg{height:100%;width:0%;background:var(--accent);border-radius:1px;transition:width .5s linear;position:relative}
+.prog-fg::after{
+  content:'';position:absolute;right:-5px;top:-4px;
+  width:10px;height:10px;border-radius:50%;background:white;
+  box-shadow:0 0 0 3px var(--accent-g)
+}
+.prog-tt{display:flex;justify-content:space-between;font-family:var(--fm);font-size:9px;color:var(--text2)}
+
+.ctrls{display:flex;align-items:center;gap:20px}
+.cb{
+  width:44px;height:44px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.1);background:var(--s1);
+  color:var(--text);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .15s
+}
+.cb svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none}
+.cb:hover{background:var(--s2);border-color:var(--s3)}
+.cb.play{
+  width:60px;height:60px;background:var(--accent);border-color:var(--accent);
+  box-shadow:0 6px 24px var(--accent-g)
+}
+.cb.play:hover{background:#e01428}
+.sp-out{
+  margin-top:14px;border:none;background:none;cursor:pointer;
+  font-family:var(--fd);font-weight:700;font-size:9px;
+  letter-spacing:.18em;color:var(--text2);transition:color .15s
+}
+.sp-out:hover{color:var(--accent)}
+
+/* ━━━━━━━━━━━━━━━━━━━ PHONE ━━━━━━━━━━━━━━━━━━━ */
+#v-phone{align-items:center;justify-content:center}
+.ph-via{
+  display:flex;align-items:center;gap:6px;padding:4px 12px;
+  background:rgba(90,180,255,.06);border:1px solid rgba(90,180,255,.18);
+  border-radius:20px;font-family:var(--fd);font-weight:700;
+  font-size:9px;letter-spacing:.12em;color:var(--blue2);margin-bottom:14px
+}
+.ph-via svg{width:12px;height:12px;stroke:var(--blue2);stroke-width:2;fill:none}
+.ph-name{
+  font-family:var(--fs);font-weight:400;font-size:30px;
+  letter-spacing:-.5px;margin-bottom:2px;color:var(--text)
+}
+.ph-num{
+  font-family:var(--fm);font-size:13px;color:var(--text2);
+  margin-bottom:26px;min-height:18px;letter-spacing:.05em
+}
+.pad{display:grid;grid-template-columns:repeat(3,56px);gap:8px;margin-bottom:22px}
+.pk{
+  width:56px;height:56px;border-radius:50%;
+  background:var(--s1);border:1px solid var(--line);
+  color:var(--text);cursor:pointer;transition:all .15s;
+  font-family:var(--fd);font-size:20px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px
+}
+.pk:hover{background:var(--s2)}
+.pk sub{font-size:6px;letter-spacing:.18em;color:var(--text2)}
+.call{
+  width:62px;height:62px;border-radius:50%;
+  background:#1a4a28;border:1.5px solid rgba(68,212,120,.25);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 4px 22px rgba(68,212,120,.18);transition:all .15s
+}
+.call svg{width:24px;height:24px;stroke:var(--green2);stroke-width:1.8;fill:none}
+.call:hover{background:#1e5c30}
+.call.active{background:#3a0a0a;border-color:rgba(200,16,46,.25)}
+.call.active svg{stroke:var(--accent)}
+
+/* ━━━━━━━━━━━━━━━━━━━ INTERCOM ━━━━━━━━━━━━━━━━━━━ */
+/* interfonico rimosso dal dock — BT gestito in Settings */
+
+.vol-wrap{width:100%;max-width:260px;margin-bottom:22px}
+.vol-hd{display:flex;justify-content:space-between;margin-bottom:9px}
+.vol-hd span{font-family:var(--fd);font-weight:700;font-size:9px;letter-spacing:.2em;color:var(--text2)}
+.vol-tr{height:3px;background:rgba(255,255,255,.08);border-radius:2px;position:relative;cursor:pointer}
+.vol-fl{height:100%;width:70%;background:linear-gradient(90deg,var(--blue),var(--blue2));border-radius:2px;transition:width .1s}
+.vol-kn{
+  position:absolute;width:14px;height:14px;border-radius:50%;
+  background:white;top:50%;left:70%;transform:translate(-50%,-50%);
+  box-shadow:0 1px 6px rgba(0,0,0,.6);transition:left .1s
+}
+
+.chs{display:flex;gap:7px}
+.ch{
+  padding:6px 15px;border-radius:20px;border:1px solid rgba(255,255,255,.07);
+  background:none;color:var(--text2);font-family:var(--fd);font-weight:700;
+  font-size:10px;letter-spacing:.12em;cursor:pointer;transition:all .15s
+}
+.ch.on{background:rgba(90,180,255,.1);border-color:rgba(90,180,255,.3);color:var(--blue2)}
+
+/* ━━━━━━━━━━━━━━━━━━━ MESSAGES ━━━━━━━━━━━━━━━━━━━ */
+#v-msg{background:var(--bg)}
+.msg-w{
+  background:#110d00;border:1px solid #2a2000;border-radius:8px;
+  padding:8px 13px;font-family:var(--fd);font-weight:700;
+  font-size:9px;letter-spacing:.12em;color:#b08000;
+  margin-bottom:12px;flex-shrink:0;display:flex;align-items:center;gap:8px
+}
+.msg-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.msg-item{
+  padding:11px 14px;border-radius:10px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.05);border-left:2px solid transparent;
+  transition:border-color .2s
+}
+.msg-item.new{border-left-color:var(--accent)}
+.msg-h{display:flex;justify-content:space-between;margin-bottom:4px}
+.msg-from{font-family:var(--fd);font-weight:700;font-size:13px;letter-spacing:.04em;color:var(--text)}
+.msg-t{font-family:var(--fm);font-size:9px;color:var(--text2)}
+.msg-b{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--fd);font-weight:400}
+
+/* ━━━━━━━━━━━━━━━━━━━ SETTINGS ━━━━━━━━━━━━━━━━━━━ */
+#v-settings{overflow-y:auto;gap:0}
+.sg{margin-bottom:18px}
+.sg-t{
+  font-family:var(--fd);font-weight:700;font-size:9px;
+  letter-spacing:.32em;color:var(--text2);margin-bottom:8px;text-transform:uppercase
+}
+.sr{
+  background:rgba(255,255,255,.03);border-radius:10px;
+  padding:12px 15px;margin-bottom:3px;
+  display:flex;justify-content:space-between;align-items:center;
+  border:1px solid rgba(255,255,255,.04)
+}
+.sr label{font-family:var(--fd);font-size:13px;font-weight:400;letter-spacing:.03em;color:var(--text)}
+.sr-v{font-family:var(--fm);font-size:11px;color:var(--text2)}
+.sr.sl{flex-direction:column;align-items:stretch;gap:9px}
+.sr.sl .sh{display:flex;justify-content:space-between}
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:2px;
+  background:rgba(255,255,255,.12);border-radius:1px;outline:none
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--accent);cursor:pointer;box-shadow:0 0 10px var(--accent-g)
+}
+.si{
+  background:rgba(255,255,255,.03);border-radius:10px;
+  padding:11px 15px;margin-bottom:3px;display:flex;justify-content:space-between;
+  border:1px solid rgba(255,255,255,.04)
+}
+.si span:first-child{font-family:var(--fd);font-size:12px;letter-spacing:.04em;color:var(--text2)}
+.si span:last-child{font-family:var(--fm);font-size:11px;color:var(--text)}
+
+/* ── NAVIGAZIONE ── */
+#map-search{
+  position:absolute;top:14px;left:14px;right:14px;z-index:20;
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:rgba(10,10,10,.88);backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:12px
+}
+#map-search svg{width:16px;height:16px;stroke:var(--text2);stroke-width:2;fill:none;flex-shrink:0}
+#dest-input{
+  flex:1;background:none;border:none;outline:none;
+  font-family:var(--fs);font-size:15px;color:var(--text);caret-color:var(--accent)
+}
+#dest-input::placeholder{color:var(--text2)}
+#dest-clear{
+  background:none;border:none;color:var(--text2);cursor:pointer;
+  font-size:16px;padding:0 2px;display:none;line-height:1
+}
+#dest-results{
+  position:absolute;top:66px;left:14px;right:14px;z-index:20;
+  background:rgba(8,8,8,.96);backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  max-height:220px;overflow-y:auto;display:none
+}
+.dr{
+  padding:12px 14px;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.04);transition:background .15s
+}
+.dr:last-child{border-bottom:none}
+.dr:hover{background:var(--s2)}
+.dr-name{font-family:var(--fs);font-size:13px;color:var(--text)}
+.dr-sub{font-size:10px;color:var(--text2);margin-top:2px;font-family:var(--fd);letter-spacing:.03em}
+
+#nav-card{
+  position:absolute;top:14px;left:14px;right:14px;z-index:20;
+  display:none;align-items:center;gap:12px;padding:12px 14px;
+  background:rgba(10,10,10,.88);backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:12px
+}
+.nav-arr{
+  width:48px;height:48px;flex-shrink:0;border-radius:10px;
+  background:var(--green);border:1px solid rgba(68,212,120,.2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;line-height:1;
+  box-shadow:0 0 18px rgba(68,212,120,.12)
+}
+.nav-arr.warn{background:#2a1a00;border-color:rgba(255,160,0,.25);color:#ffa000}
+.nav-arr.dest{background:#1a0a1a;border-color:rgba(200,16,46,.25)}
+
+#nav-bot{
+  position:absolute;bottom:14px;left:14px;right:14px;z-index:20;
+  display:none;
+  background:rgba(10,10,10,.88);backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:12px;
+  padding:10px 14px;align-items:center;gap:0
+}
+.nb-stat{flex:1;text-align:center}
+.nb-stat small{font-family:var(--fd);font-weight:700;font-size:8px;letter-spacing:.2em;color:var(--text2);display:block;margin-bottom:3px}
+.nb-stat strong{font-family:var(--fm);font-weight:300;font-size:20px;color:var(--text);line-height:1}
+.nb-sep{width:1px;background:var(--line);flex-shrink:0;align-self:stretch;margin:4px 0}
+.nb-stop{
+  background:rgba(200,16,46,.12);border:1px solid rgba(200,16,46,.25);
+  border-radius:20px;color:var(--accent);padding:7px 14px;
+  font-family:var(--fd);font-weight:700;font-size:9px;letter-spacing:.18em;
+  cursor:pointer;flex-shrink:0;margin-left:8px;transition:all .15s
+}
+.nb-stop:hover{background:rgba(200,16,46,.22)}
+
+/* nasconde GPS stats di default — visibili solo fuori navigazione */
+#gps-bot{position:absolute;bottom:14px;left:14px;right:14px;z-index:20}
+
+/* ── TEMA CHIARO (sole) ── */
+:root.light {
+  --bg:    #f0ede8;
+  --s1:    rgba(0,0,0,.05);
+  --s2:    rgba(0,0,0,.09);
+  --s3:    rgba(0,0,0,.14);
+  --line:  rgba(0,0,0,.1);
+  --text:  #161412;
+  --text2: #706860;
+  --text3: #c8c4bc;
+  --green: #0f6030; --green2:#0f7034;
+  --blue:  #0a3898; --blue2: #1050c0;
+  --accent-g: rgba(200,16,46,.18);
+}
+:root.light body            { background:var(--bg); color:var(--text); }
+:root.light #bar            { background:rgba(240,237,232,.96)!important; border-color:rgba(0,0,0,.1); }
+:root.light #dock           { background:rgba(240,237,232,.94)!important; border-color:rgba(0,0,0,.1); }
+:root.light #banner         { background:#fff8e0; border-color:#e8d080; color:#a06000; }
+:root.light .gc             { background:rgba(255,255,255,.7)!important; border-color:rgba(0,0,0,.09)!important; }
+:root.light #map-search     { background:rgba(255,255,255,.82)!important; }
+:root.light #dest-results   { background:rgba(248,246,242,.97)!important; }
+:root.light .dr:hover        { background:rgba(0,0,0,.04)!important; }
+:root.light #nav-card        { background:rgba(255,255,255,.82)!important; }
+:root.light #nav-bot,:root.light #gps-bot { background:rgba(255,255,255,.82)!important; border-color:rgba(0,0,0,.08)!important; }
+:root.light .db             { color:var(--text)!important; }
+:root.light .db-ico         { opacity:.55; }
+:root.light .msg-item       { background:rgba(0,0,0,.04)!important; border-color:rgba(0,0,0,.06)!important; }
+:root.light .sr,.root.light .si { background:rgba(0,0,0,.04)!important; }
+:root.light .sr,.root.light .ios-box { background:rgba(0,0,0,.04)!important; }
+:root.light #v-phone  { background:var(--bg)!important; }
+:root.light .ph-name { color:var(--text)!important; }
+:root.light .ph-num  { color:var(--text2)!important; }
+:root.light .ph-via  {
+  background:rgba(16,80,192,.08)!important;
+  border-color:rgba(16,80,192,.2)!important;
+  color:var(--blue)!important;
+}
+:root.light .pk {
+  background:rgba(0,0,0,.06)!important;
+  border-color:rgba(0,0,0,.12)!important;
+  color:var(--text)!important;
+}
+:root.light .pk sub { color:var(--text2)!important; }
+:root.light .call   { box-shadow:0 4px 16px rgba(30,94,52,.2)!important; }
+:root.light #v-music        { background:radial-gradient(ellipse at 50% 30%,#f0e0e4,var(--bg))!important; }
+:root.light .art-bg         { background:linear-gradient(135deg,#e8d0d4,#c8102e,#900)!important; }
+:root.light .music-art      { box-shadow:0 12px 40px rgba(200,16,46,.2)!important; }
+:root.light .cb             { background:rgba(0,0,0,.06)!important; border-color:rgba(0,0,0,.1)!important; color:var(--text)!important; }
+:root.light .pk             { background:rgba(0,0,0,.05)!important; border-color:rgba(0,0,0,.1)!important; color:var(--text)!important; }
+:root.light .ic-outer       { border-color:rgba(16,80,192,.2)!important; }
+:root.light .ic-inner       { background:rgba(0,0,0,.05)!important; border-color:rgba(0,0,0,.1)!important; }
+:root.light .ch             { border-color:rgba(0,0,0,.1)!important; color:var(--text2)!important; }
+:root.light .bt-btn         { background:rgba(16,80,192,.08)!important; border-color:rgba(16,80,192,.2)!important; }
+:root.light .sp-btn         { box-shadow:0 4px 16px rgba(0,0,0,.1); }
+:root.light #v-settings .sg-t { color:var(--text2); }
+:root.light .bar-logo       { text-shadow:0 0 12px rgba(200,16,46,.3); }
+:root.light .bg-sw          { border-color:rgba(0,0,0,.12)!important; }
+
+/* ── METEO ── */
+#weather-widget{display:none;align-items:center;gap:3px;cursor:default;padding:2px 6px}
+#w-icon{font-size:14px;line-height:1}
+#w-temp{font-family:var(--fm);font-size:11px;color:var(--text2)}
+#w-rain{font-size:9px;color:var(--blue2);margin-left:2px}
+
+/* ── SOS ── */
+#sos-btn{
+  background:none;border:none;cursor:pointer;
+  font-family:var(--fd);font-weight:900;font-size:10px;letter-spacing:.15em;
+  color:rgba(200,16,46,.35);padding:4px 6px;border-radius:6px;
+  transition:color .2s;-webkit-user-select:none;user-select:none
+}
+#sos-btn:active,#sos-btn.armed{color:var(--accent)}
+#sos-overlay{
+  display:none;position:fixed;inset:0;z-index:300;
+  background:rgba(200,16,46,.1);backdrop-filter:blur(8px);
+  flex-direction:column;align-items:center;justify-content:center;gap:14px
+}
+.sos-num{
+  font-family:var(--fd);font-weight:900;font-size:96px;
+  color:var(--accent);line-height:1;
+  animation:sosPulse .9s ease-in-out infinite
+}
+@keyframes sosPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(.95)}}
+.sos-hint{font-family:var(--fd);font-weight:700;font-size:10px;letter-spacing:.3em;color:var(--text)}
+.sos-sub{font-family:var(--fd);font-size:12px;letter-spacing:.08em;color:var(--text2)}
+
+/* ── VOCE ── */
+#voice-btn{
+  position:absolute;bottom:90px;right:14px;z-index:20;
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(3,3,3,.7);backdrop-filter:blur(8px);
+  border:1px solid var(--line);color:var(--text2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;cursor:pointer;transition:all .2s
+}
+#voice-btn.on{color:var(--green2);border-color:rgba(68,212,120,.3);background:rgba(68,212,120,.08)}
+:root.light #voice-btn{background:rgba(255,255,255,.85)}
+
+/* ── NAV ARROW PULSE ── */
+@keyframes navPulse {
+  0%,100% { transform:scale(1); box-shadow:0 0 18px rgba(68,212,120,.12); }
+  50%      { transform:scale(1.12); box-shadow:0 0 28px rgba(68,212,120,.4); }
+}
+
+/* ── SEARCH LOADING ── */
+#dest-input:disabled { opacity:.5; }
+
+/* ── OBD OVERLAY ── */
+#obd-overlay{
+  position:absolute;top:70px;right:14px;z-index:15;
+  display:none;flex-direction:column;gap:4px;
+  background:rgba(3,3,3,.78);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,.08);border-radius:10px;
+  padding:8px 12px;min-width:80px
+}
+.obd-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.obd-lbl{font-family:var(--fd);font-size:8px;letter-spacing:.18em;color:var(--text2);font-weight:700}
+.obd-val{font-family:var(--fm);font-size:15px;color:var(--text);line-height:1;font-weight:400}
+.obd-val.big{font-size:22px;color:var(--accent)}
+:root.light #obd-overlay{background:rgba(245,243,240,.88)}
+
+/* ── SPLIT SCREEN ── */
+
+/* In split: #area diventa flex row, le view escono dall'absolute stacking */
+#area.split {
+  display:flex !important;
+  flex-direction:row !important;
+}
+
+/* Tutte le view: tornano nel flusso ma invisibili (width:0) */
+#area.split > .view {
+  position:relative !important;
+  inset:auto !important;
+  flex-shrink:0;
+  width:0 !important;
+  min-width:0 !important;
+  overflow:hidden;
+  opacity:0 !important;
+  pointer-events:none !important;
+  transform:none !important;
+  padding:0 !important;
+  display:flex !important;    /* mantiene display flex ma width:0 la nasconde */
+}
+
+/* Mappa: sempre visibile a sinistra (42%) */
+#area.split > #v-maps {
+  width:42% !important;
+  min-width:42% !important;
+  max-width:42% !important;
+  opacity:1 !important;
+  pointer-events:all !important;
+  border-right:1px solid var(--line);
+}
+
+/* App destra: prende lo spazio rimanente */
+#area.split > .view.sp-right {
+  flex:1 !important;
+  width:auto !important;
+  min-width:0 !important;
+  opacity:1 !important;
+  pointer-events:all !important;
+  padding:16px !important;
+  overflow:hidden;
+}
+
+/* Scala elementi mappa in split */
+#area.split #nav-arr  { width:38px; height:38px; font-size:18px; }
+#area.split #nav-ins  { font-size:14px !important; }
+#area.split #nav-dist { font-size:20px !important; }
+#area.split #map-search,
+#area.split #nav-card { top:10px; left:10px; right:10px; }
+#area.split #gps-bot,
+#area.split #nav-bot  { bottom:10px; left:10px; right:10px; }
+#area.split #obd-overlay { top:60px; right:10px; }
+
+/* ── BAR BUTTONS ── */
+.bar-btn {
+  background:none; border:none; cursor:pointer;
+  color:var(--text2); font-size:15px; padding:4px 5px; line-height:1;
+  transition:color .2s; border-radius:6px;
+}
+.bar-btn:hover { color:var(--text); }
+.bar-btn.on { color:var(--accent); }
+
+/* ── LISTA APP ── */
+#v-apps { justify-content:flex-start; }
+.app-grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap:12px;
+  width:100%;
+}
+.app-tile {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:18px 8px; border-radius:16px;
+  background:var(--s1); border:1px solid var(--line);
+  cursor:pointer; transition:all .18s; position:relative;
+  -webkit-tap-highlight-color:transparent;
+}
+.app-tile:hover, .app-tile:active { background:var(--s2); transform:scale(.97); }
+.app-tile svg { width:32px; height:32px; stroke:currentColor; stroke-width:1.5; fill:none; }
+.app-tile span {
+  font-family:var(--fd); font-weight:700; font-size:10px;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--text2);
+}
+.app-tile.active-tile svg { stroke:var(--accent); }
+.app-tile.active-tile { border-color:rgba(200,16,46,.25); background:rgba(200,16,46,.06); }
+.app-tile .tile-badge {
+  position:absolute; top:8px; right:8px;
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green2); box-shadow:0 0 5px var(--green2);
+  display:none;
+}
+.app-tile .tile-badge.show { display:block; }
+:root.light .app-tile { background:rgba(0,0,0,.04); border-color:rgba(0,0,0,.08); }
+:root.light .app-tile:hover { background:rgba(0,0,0,.08); }
+
+/* ── TEMA BACKGROUND ── */
+.bg-grid{display:flex;gap:8px;flex-wrap:wrap}
+.bg-sw{
+  width:44px;height:44px;border-radius:10px;border:2px solid transparent;
+  cursor:pointer;transition:all .2s;position:relative;flex-shrink:0
+}
+.bg-sw.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-g)}
+.bg-sw::after{
+  content:attr(data-name);
+  position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);
+  font-family:var(--fd);font-size:8px;letter-spacing:.08em;
+  color:var(--text2);white-space:nowrap
+}
+.bg-row{margin-bottom:22px}
+
+.ios-box{
+  background:rgba(90,180,255,.04);border:1px solid rgba(90,180,255,.14);
+  border-radius:10px;padding:14px;margin-bottom:3px
+}
+.ios-box h4{
+  font-family:var(--fd);font-weight:700;font-size:9px;
+  letter-spacing:.25em;color:var(--blue2);margin-bottom:10px
+}
+.ios-box li{
+  font-family:var(--fd);font-size:11px;letter-spacing:.03em;
+  color:var(--text2);margin-bottom:6px;line-height:1.6;margin-left:12px
+}
+.ios-box li b{color:var(--text);font-weight:600}
+
+/* ━━━━━━━━━━━━━━━━━━━ DOCK ━━━━━━━━━━━━━━━━━━━ */
+#dock{
+  height:66px;flex-shrink:0;display:flex;align-items:stretch;
+  background:rgba(3,3,3,.9);backdrop-filter:blur(24px);
+  border-top:1px solid var(--line);position:relative
+}
+#dock::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent)
+}
+
+.db{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;border:none;background:none;cursor:pointer;
+  transition:all .2s;padding:0;position:relative;
+  color:var(--text);            /* fix: button non eredita color dal body */
+}
+.db::after{
+  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%) scaleX(0);
+  width:20px;height:2px;border-radius:0 0 2px 2px;
+  background:var(--accent);transition:transform .25s cubic-bezier(.34,1.56,.64,1)
+}
+.db.on::after{transform:translateX(-50%) scaleX(1)}
+.db-ico{
+  width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+  opacity:.55;transition:all .2s
+}
+.db-ico svg{
+  width:20px;height:20px;
+  stroke:currentColor;stroke-width:1.8;
+  fill:none;color:inherit;
+  overflow:visible
+}
+/* assicura ereditarietà su tutti i figli SVG */
+.db-ico svg *{stroke:inherit;fill:inherit}
+.db-ico svg [data-fill]{fill:currentColor;stroke:none}
+.db.on .db-ico{opacity:1;color:var(--accent)}
+.db-lbl{
+  font-family:var(--fd);font-weight:700;font-size:7px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--text2);opacity:0;transition:opacity .2s
+}
+.db.on .db-lbl{opacity:.5}
+
+/* scrollbar */
+::-webkit-scrollbar{width:2px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:1px}
+
+/* ══════════════════════════════════════════════
+   PORTRAIT / VERTICALE
+   ══════════════════════════════════════════════ */
+@media (orientation: portrait) {
+
+  /* Status bar: più alta per touch comodo */
+  #bar {
+    height: calc(52px + env(safe-area-inset-top));
+    padding-left:  max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .bar-t  { font-size: 16px; }
+  .bar-logo { font-size: 14px; }
+
+  /* Dock: più alto, icone più grandi */
+  #dock {
+    height: calc(80px + env(safe-area-inset-bottom));
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+  .db-ico     { width:28px; height:28px; opacity:.55; }
+  .db-ico svg { width:24px; height:24px; stroke-width:1.6; }
+  .db.on .db-ico { opacity:1; }
+  .dl         { font-size:8px; letter-spacing:.12em; }
+
+  /* ── SPLIT VERTICALE (mappe sopra, app sotto) ── */
+  #area.split               { flex-direction: column !important; }
+  #area.split > #v-maps     {
+    width:100% !important; min-width:unset !important; max-width:unset !important;
+    height:46% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--line);
+  }
+  #area.split > .view.sp-right {
+    width:100% !important;
+    flex:1 !important;
+    height:auto !important;
+    padding:14px !important;
+  }
+  /* Elementi mappa in portrait-split più compatti */
+  #area.split #nav-arr   { width:34px; height:34px; font-size:16px; }
+  #area.split #nav-ins   { font-size:13px !important; }
+  #area.split #nav-dist  { font-size:18px !important; }
+
+  /* ── MAPPA: overlay adattati ── */
+  #map-search, #nav-card  { top:10px; left:10px; right:10px; }
+  #gps-bot, #nav-bot      { bottom:10px; left:10px; right:10px; }
+  #voice-btn              { bottom:88px; right:12px; }
+  #obd-overlay            { top:auto; bottom:88px; right:12px; }
+
+  /* Direzione più grande in portrait */
+  .nav-arr    { width:52px; height:52px; font-size:26px; }
+  #nav-ins    { font-size:20px !important; }
+  #nav-dist   { font-size:30px !important; }
+
+  /* ── MUSICA: album art più piccolo ── */
+  .art-wrap   { width:130px; height:130px; margin-bottom:14px; }
+  .now-title  { font-size:20px; }
+  .now-artist { font-size:11px; margin-bottom:14px; }
+  .prog-wrap  { margin-bottom:16px; }
+  .cb.play    { width:56px; height:56px; font-size:18px; }
+  .cb         { width:40px; height:40px; }
+
+  /* ── TELEFONO: pad più grande ── */
+  .pad        { grid-template-columns:repeat(3, 64px); gap:10px; margin-bottom:24px; }
+  .pk         { width:64px; height:64px; font-size:22px; }
+  .call       { width:70px; height:70px; }
+
+
+  /* ── SPLASH in portrait ── */
+  .sp-wordrow { font-size: clamp(36px,10vw,56px); }
+  .sp-brand p { font-size: 26px; }
+
+  /* ── SOS overlay ── */
+  .sos-num { font-size: 110px; }
+
+  /* ── General padding ridotto su schermi stretti ── */
+  .view       { padding: 14px 14px 10px; }
+  #v-settings { padding: 12px 12px 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ━━━━━━━━━━━━━━━━━━━ SPLASH ━━━━━━━━━━━━━━━━━━━ -->
+<div id="splash">
+  <div style="display:flex;gap:.5em;align-items:baseline">
+    <div class="sp-wordrow" id="sp-moto"></div>
+    <div class="sp-wordrow" id="sp-guzzi"></div>
+  </div>
+  <div class="sp-divider" style="animation-delay:.65s"></div>
+  <div class="sp-tagline"  style="animation-delay:.85s">MotoPlay</div>
+  <div class="sp-sub"      style="animation-delay:1.05s">Connected Ride System</div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━ APP ━━━━━━━━━━━━━━━━━━━ -->
+<div id="app">
+
+  <div id="bar">
+    <span class="bar-t" id="clock">--:--</span>
+    <div class="bar-c">
+      <div class="ind off" id="pill-ph">
+        <span class="d"></span><span id="ph-lbl">—</span>
+      </div>
+      <div class="ind off" id="pill-ic">
+        <span class="d"></span><span id="ic-lbl">—</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;align-items:center">
+      <!-- Meteo -->
+      <div id="weather-widget"></div>
+      <!-- LIVE badge -->
+      <div id="ws-badge" style="display:none;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;background:var(--s1);border:1px solid var(--line)">
+        <div id="ws-dot" style="width:5px;height:5px;border-radius:50%;background:var(--text2);transition:all .4s"></div>
+        <span id="ws-label" style="font-family:var(--fd);font-weight:700;font-size:8px;letter-spacing:.15em;color:var(--text2)">LIVE</span>
+      </div>
+      <!-- SOS (tieni premuto 3s) -->
+      <button id="sos-btn"
+        onmousedown="sosStart()" ontouchstart="sosStart(event)"
+        onmouseup="sosCancel()" ontouchend="sosCancel()"
+        onmouseleave="sosCancel()" title="Tieni premuto 3s per SOS">SOS</button>
+      <button class="bar-btn" id="split-btn" onclick="toggleSplit()" title="Split screen">⊞</button>
+      <button class="bar-btn" id="theme-btn" onclick="toggleTheme()" title="Tema">☀</button>
+      <span class="bar-logo">MG</span>
+    </div>
+  </div>
+
+  <!-- SOS Overlay -->
+  <div id="sos-overlay"
+    onmouseup="sosCancel()" ontouchend="sosCancel()">
+    <div class="sos-num" id="sos-count">3</div>
+    <div class="sos-hint">RILASCIA PER ANNULLARE</div>
+    <div class="sos-sub">Invio posizione GPS al contatto di emergenza</div>
+  </div>
+
+  <!-- Overlay chiamata in arrivo -->
+  <div id="call-overlay" style="display:none;position:fixed;inset:0;z-index:150;
+    background:rgba(3,3,3,.92);backdrop-filter:blur(20px);
+    flex-direction:column;align-items:center;justify-content:center;gap:14px">
+    <div style="font-family:var(--fd);font-size:11px;letter-spacing:.3em;color:var(--text2)">CHIAMATA IN ARRIVO</div>
+    <div id="call-overlay-name"   style="font-family:var(--fs);font-size:34px;font-weight:700;color:var(--text)">—</div>
+    <div id="call-overlay-number" style="font-family:var(--fm);font-size:14px;color:var(--text2)"></div>
+    <div style="display:flex;gap:28px;margin-top:14px">
+      <button onclick="wsSend({cmd:'call_reject'});document.getElementById('call-overlay').style.display='none'"
+        style="width:68px;height:68px;border-radius:50%;background:#3a0a0a;border:2px solid rgba(200,16,46,.3);
+        color:var(--accent);font-size:26px;cursor:pointer">✕</button>
+      <button onclick="wsSend({cmd:'call_answer'});document.getElementById('call-overlay').style.display='none'"
+        style="width:68px;height:68px;border-radius:50%;background:#0a2a14;border:2px solid rgba(68,212,120,.3);
+        color:var(--green2);font-size:26px;cursor:pointer">✓</button>
+    </div>
+  </div>
+
+  <div id="banner">
+    ⚠ Token mancanti —
+    <a href="#" onclick="sw('settings',document.querySelector('[data-v=settings]'));return false">Apri Setup</a>
+  </div>
+
+  <div id="area">
+
+    <!-- MAPPE -->
+    <div class="view on" id="v-maps">
+
+      <!-- Ricerca destinazione (idle) -->
+      <div id="map-search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="dest-input" type="text" placeholder="Dove vuoi andare?" autocomplete="off" oninput="onDestInput(this.value)">
+        <button id="dest-clear" onclick="clearDest()">×</button>
+      </div>
+      <div id="dest-results"></div>
+
+      <!-- Card svolta per svolta (navigazione) -->
+      <div id="nav-card">
+        <div class="nav-arr" id="nav-arr">↑</div>
+        <div style="flex:1">
+          <h2 id="nav-ins" style="font-family:var(--fs);font-weight:700;font-size:17px;line-height:1.15;color:var(--text)">—</h2>
+          <p  id="nav-rd"  style="font-size:11px;color:var(--text2);margin-top:3px;font-family:var(--fd)">—</p>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--fm);font-size:26px;font-weight:300;color:var(--green2);line-height:1" id="nav-dist">—</div>
+          <div style="font-size:9px;color:var(--text2);font-family:var(--fd)" id="nav-du">m</div>
+        </div>
+      </div>
+
+      <!-- OBD overlay (visibile solo con server LIVE) -->
+      <div id="obd-overlay">
+        <div class="obd-row">
+          <span class="obd-lbl">KM/H</span>
+          <span class="obd-val big" id="obd-spd">—</span>
+        </div>
+        <div class="obd-row">
+          <span class="obd-lbl">GEAR</span>
+          <span class="obd-val big" id="obd-gear">N</span>
+        </div>
+        <div class="obd-row">
+          <span class="obd-lbl">RPM</span>
+          <span class="obd-val" id="obd-rpm">—</span>
+        </div>
+        <div class="obd-row">
+          <span class="obd-lbl">TEMP</span>
+          <span class="obd-val" id="obd-tmp">—</span>
+        </div>
+        <div class="obd-row">
+          <span class="obd-lbl">CARB</span>
+          <span class="obd-val" id="obd-fuel">—</span>
+        </div>
+      </div>
+
+      <!-- Toggle voce navigazione -->
+      <button id="voice-btn" class="on" onclick="toggleVoice()" title="Voce navigazione">🔊</button>
+
+      <!-- Mappa full-bleed -->
+      <div id="mapbox-container">
+        <div id="map-placeholder">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <p>Aggiungi MAPBOX_TOKEN in config.js</p>
+          <a href="https://account.mapbox.com" target="_blank">account.mapbox.com →</a>
+        </div>
+      </div>
+
+      <!-- Bottom GPS stats (idle) -->
+      <div id="gps-bot" class="gc" style="display:flex;padding:10px 14px;align-items:center">
+        <div class="nb-stat"><small>Velocità</small><strong id="gps-spd">—</strong></div>
+        <div class="nb-sep"></div>
+        <div class="nb-stat"><small>Heading</small><strong id="gps-hdg">—</strong></div>
+        <div class="nb-sep"></div>
+        <div class="nb-stat"><small>Accuratezza</small><strong id="gps-acc">—</strong></div>
+      </div>
+
+      <!-- Bottom ETA (navigazione) -->
+      <div id="nav-bot">
+        <div class="nb-stat"><small>Arrivo</small><strong id="nav-eta">—</strong></div>
+        <div class="nb-sep"></div>
+        <div class="nb-stat"><small>Distanza</small><strong id="nav-km">—</strong></div>
+        <div class="nb-sep"></div>
+        <div class="nb-stat"><small>Tempo</small><strong id="nav-min">—</strong></div>
+        <button class="nb-stop" onclick="stopNav()">✕ STOP</button>
+      </div>
+
+    </div>
+
+    <!-- MUSICA -->
+    <div class="view" id="v-music">
+      <div id="sp-connect">
+        <div class="art-wrap" style="margin-bottom:18px">
+          <div class="art-bg">
+            <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+          </div>
+        </div>
+        <p>Collega Spotify per controllare la musica.</p>
+        <button class="sp-btn" onclick="connectSpotify()" id="sp-btn">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.623.623 0 01-.277-1.215c3.809-.87 7.077-.496 9.712 1.115a.622.622 0 01.207.857zm1.223-2.722a.78.78 0 01-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.78.78 0 01-.973-.518.781.781 0 01.518-.973c3.632-1.102 8.147-.568 11.235 1.328a.78.78 0 01.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.938.938 0 11-.543-1.794c3.532-1.072 9.404-.865 13.115 1.337a.937.937 0 11-.955 1.614z"/></svg>
+          COLLEGA SPOTIFY
+        </button>
+        <p class="sp-note" id="sp-warn" style="display:none;color:var(--accent)">Aggiungi CLIENT_ID in config.js</p>
+        <p class="sp-note">Richiede Spotify Premium</p>
+      </div>
+
+      <div id="sp-player">
+        <div class="art-wrap">
+          <div class="art-bg" id="art-fb">
+            <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+          </div>
+          <img id="art-img" src="" alt="">
+        </div>
+        <div class="now-title"  id="sp-t">—</div>
+        <div class="now-artist" id="sp-a">—</div>
+        <div class="prog">
+          <div class="prog-bg"><div class="prog-fg" id="sp-prog"></div></div>
+          <div class="prog-tt"><span id="sp-pos">0:00</span><span id="sp-dur">0:00</span></div>
+        </div>
+        <div class="ctrls">
+          <button class="cb" onclick="spPrev()"><svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg></button>
+          <button class="cb play" id="sp-pb" onclick="spToggle()"><svg viewBox="0 0 24 24"><polygon id="sp-ico" points="5 3 19 12 5 21 5 3"/></svg></button>
+          <button class="cb" onclick="spNext()"><svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20"/></svg></button>
+        </div>
+        <button class="sp-out" onclick="spDisconnect()">DISCONNETTI SPOTIFY</button>
+      </div>
+    </div>
+
+    <!-- TELEFONO -->
+    <div class="view" id="v-phone">
+      <div class="ph-via" id="ph-via" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        AUDIO VIA <span id="ph-bt-name">BT</span>
+      </div>
+      <div class="ph-name" id="ph-nm">Componi</div>
+      <div class="ph-num"  id="ph-dn"></div>
+      <div class="pad">
+        <button class="pk" onclick="dial('1')">1</button>
+        <button class="pk" onclick="dial('2')">2<sub>ABC</sub></button>
+        <button class="pk" onclick="dial('3')">3<sub>DEF</sub></button>
+        <button class="pk" onclick="dial('4')">4<sub>GHI</sub></button>
+        <button class="pk" onclick="dial('5')">5<sub>JKL</sub></button>
+        <button class="pk" onclick="dial('6')">6<sub>MNO</sub></button>
+        <button class="pk" onclick="dial('7')">7<sub>PQRS</sub></button>
+        <button class="pk" onclick="dial('8')">8<sub>TUV</sub></button>
+        <button class="pk" onclick="dial('9')">9<sub>WXYZ</sub></button>
+        <button class="pk" onclick="dial('*')">✱</button>
+        <button class="pk" onclick="dial('0')">0</button>
+        <button class="pk" onclick="dial('#')">⌗</button>
+      </div>
+      <button class="call" id="call-b" onclick="simCall()">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 8.11a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </button>
+    </div>
+
+    <!-- INTERFONICO -->
+    <!-- LISTA APP -->
+    <div class="view" id="v-apps">
+      <div class="vtag">App</div>
+      <div class="app-grid">
+
+        <div class="app-tile" onclick="sw('maps', document.querySelector('[data-v=maps]'))">
+          <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span>Mappe</span>
+        </div>
+
+        <div class="app-tile" id="tile-music" onclick="sw('music', document.querySelector('[data-v=music]'))">
+          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <span>Musica</span>
+          <div class="tile-badge" id="tile-music-badge"></div>
+        </div>
+
+        <div class="app-tile" onclick="sw('phone', document.querySelector('[data-v=phone]'))">
+          <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 8.11a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>Chiama</span>
+        </div>
+
+        <div class="app-tile" onclick="sw('msg', document.querySelector('[data-v=msg]'))">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Messaggi</span>
+        </div>
+
+        <div class="app-tile" id="tile-bt" onclick="sw('settings', document.querySelector('[data-v=settings]'))">
+          <svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+          <span>Interfono</span>
+          <div class="tile-badge" id="tile-bt-badge"></div>
+        </div>
+
+        <div class="app-tile" onclick="sw('settings', document.querySelector('[data-v=settings]'))">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="18" r="2" fill="currentColor" stroke="none"/></svg>
+          <span>Setup</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Interfonico rimosso dal dock — gestito in Settings -->
+
+    <!-- MESSAGGI -->
+    <div class="view" id="v-msg">
+      <div class="vtag">Messaggi</div>
+      <div class="msg-w">⚠ SOLA LETTURA — non rispondere durante la guida</div>
+      <div class="msg-list" id="msg-list">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;opacity:.35;padding:20px">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <p style="font-family:var(--fd);font-size:11px;letter-spacing:.15em;text-align:center;line-height:1.7">Nessun messaggio<br><span style="font-size:9px;opacity:.7">Le notifiche arriveranno qui<br>quando installato sul Raspberry Pi</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPOSTAZIONI -->
+    <div class="view" id="v-settings">
+      <div class="vtag">Impostazioni</div>
+      <div class="sg">
+        <div class="sg-t">Display</div>
+        <div class="sr sl"><div class="sh"><label>Luminosità</label><span class="sr-v" id="br-v">80%</span></div>
+          <input type="range" min="10" max="100" value="80" oninput="document.getElementById('br-v').textContent=this.value+'%'"></div>
+      </div>
+      <div class="sg">
+        <div class="sg-t">Audio</div>
+        <div class="sr sl"><div class="sh"><label>Volume</label><span class="sr-v" id="sv-v">70%</span></div>
+          <input type="range" min="0" max="100" value="70" oninput="document.getElementById('sv-v').textContent=this.value+'%'"></div>
+      </div>
+      <div class="sg bg-row">
+        <div class="sg-t">Sfondo</div>
+        <div class="bg-grid" id="bg-grid"></div>
+      </div>
+
+      <div class="sg">
+        <div class="sg-t">API Keys</div>
+        <div class="si"><span>Mapbox Token</span><span id="cfg-mb">—</span></div>
+        <div class="si"><span>Spotify Client ID</span><span id="cfg-sp">—</span></div>
+        <div class="si"><span>OpenWeather Key</span><span id="cfg-ow">—</span></div>
+      </div>
+      <div class="sg">
+        <div class="sg-t">Emergenza</div>
+        <div class="sr sl">
+          <div class="sh"><label>Contatto SOS (WhatsApp/SMS)</label></div>
+          <input type="tel" id="sos-input" placeholder="+39333123456"
+            style="background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--fm);font-size:13px;outline:none;width:100%"
+            oninput="localStorage.setItem('mg_sos_contact',this.value)">
+        </div>
+        <div class="si" style="font-size:11px"><span>Come usare SOS</span><span style="color:var(--text2)">Tieni premuto 3s</span></div>
+      </div>
+      <div class="sg">
+        <div class="sg-t">iPhone / iOS</div>
+        <div class="ios-box">
+          <h4>COLLEGAMENTO iOS</h4>
+          <ul>
+            <li><b>Audio:</b> AirPlay dal Centro di Controllo iPhone</li>
+            <li><b>Spotify:</b> OAuth nel tab Musica</li>
+            <li><b>Bluetooth:</b> Chrome desktop/Android (non Safari iOS)</li>
+            <li><b>CarPlay nativo:</b> richiede OpenAuto Pro su Raspberry Pi</li>
+          </ul>
+        </div>
+      </div>
+      <div class="sg">
+        <div class="sg-t">Bluetooth Interfonico</div>
+        <div class="sr" style="flex-direction:column;align-items:flex-start;gap:10px">
+          <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
+            <div>
+              <div id="bt-nm" style="font-family:var(--fd);font-size:14px;color:var(--text)">Nessun dispositivo</div>
+              <div id="bt-st" style="font-family:var(--fd);font-size:9px;letter-spacing:.2em;margin-top:2px;color:var(--text2)">DISCONNESSO</div>
+            </div>
+            <button id="bt-btn" onclick="btConnect()"
+              style="background:rgba(90,180,255,.08);border:1px solid rgba(90,180,255,.2);border-radius:20px;
+              color:var(--blue2);padding:7px 16px;font-family:var(--fd);font-weight:700;font-size:10px;
+              letter-spacing:.15em;cursor:pointer">CONNETTI</button>
+          </div>
+          <div id="bt-no" style="display:none;font-size:10px;color:var(--text2);letter-spacing:.08em">
+            Web Bluetooth non supportato — usa Chrome desktop/Android
+          </div>
+          <!-- Volume (visibile solo se connesso) -->
+          <div id="bt-vol-row" style="display:none;width:100%">
+            <div class="vol-hd"><span>VOLUME INTERFONICO</span><span id="vol-v">70%</span></div>
+            <div class="vol-tr" id="vt" onclick="setVol(event)">
+              <div class="vol-fl" id="vf"></div>
+              <div class="vol-kn" id="vk"></div>
+            </div>
+          </div>
+          <!-- Canali (visibile solo se connesso) -->
+          <div id="bt-ch-row" style="display:none;gap:8px;flex-wrap:wrap">
+            <div style="font-family:var(--fd);font-size:9px;letter-spacing:.2em;color:var(--text2);width:100%;margin-bottom:4px">CANALE</div>
+            <button class="ch on" onclick="setCh(this)">Canale A</button>
+            <button class="ch"    onclick="setCh(this)">Canale B</button>
+            <button class="ch"    onclick="setCh(this)">Musica</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sg">
+        <div class="sg-t">Sistema</div>
+        <div class="si"><span>Versione</span><span>MotoPlay 0.1</span></div>
+        <div class="si"><span>Server</span><span id="srv-t">—</span></div>
+        <div class="si"><span>GPS</span><span id="geo-s">—</span></div>
+        <div class="si"><span>Web BT</span><span id="bt-sup">—</span></div>
+      </div>
+    </div>
+
+  </div><!-- /area -->
+
+  <!-- DOCK -->
+  <div id="dock">
+    <button class="db on" data-v="maps"     onclick="sw('maps',this)">
+      <span class="db-ico"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+      <span class="db-lbl">Mappe</span>
+    </button>
+    <button class="db" data-v="music"    onclick="sw('music',this)">
+      <span class="db-ico"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+      <span class="db-lbl">Musica</span>
+    </button>
+    <button class="db" data-v="phone"    onclick="sw('phone',this)">
+      <span class="db-ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 8.11a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+      <span class="db-lbl">Chiama</span>
+    </button>
+    <button class="db" data-v="msg"      onclick="sw('msg',this)">
+      <span class="db-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="db-lbl">Messaggi</span>
+    </button>
+    <button class="db" data-v="apps"     onclick="sw('apps',this)">
+      <span class="db-ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+      <span class="db-lbl">App</span>
+    </button>
+    <button class="db" data-v="settings" onclick="sw('settings',this)">
+      <span class="db-ico"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="18" r="2" fill="currentColor" stroke="none"/></svg></span>
+      <span class="db-lbl">Setup</span>
+    </button>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+const CFG = window.MOTOPLAY || {};
+
+// ── SPLASH letter reveal ─────────────────────────────────────
+function buildLetters(el, word, baseDelay) {
+  word.split('').forEach((ch, i) => {
+    const s = document.createElement('span');
+    s.className = 'sp-letter';
+    s.style.animationDelay = (baseDelay + i * .07) + 's';
+    s.textContent = ch;
+    el.appendChild(s);
+  });
+}
+buildLetters(document.getElementById('sp-moto'),  'MOTO',  .10);
+buildLetters(document.getElementById('sp-guzzi'), 'GUZZI', .32);
+
+// ── INIT ─────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  tick(); setInterval(tick, 30000);
+  checkCfg();
+  initGeo();
+  initBT();
+  checkSpotify();
+  document.getElementById('srv-t').textContent =
+    location.protocol === 'file:' ? 'file:// — usa start.bat' : 'localhost ✓';
+
+  setTimeout(() => {
+    document.getElementById('splash').classList.add('out');
+    setTimeout(() => {
+      document.getElementById('splash').remove();
+      document.getElementById('app').classList.add('show');
+      setTimeout(() => { if (!mapInit) initMap(); }, 100);
+      requestWakeLock();   // schermo sempre acceso
+      initWeather();       // avvia polling meteo
+    }, 500);   // fade-out splash: 500ms (era 950ms)
+  }, 1800);    // splash visibile: 1.8s (era 3.2s) — animazione finisce a ~1.9s
+});
+
+// ── CLOCK ─────────────────────────────────────────────────────
+function tick() {
+  const d = new Date();
+  document.getElementById('clock').textContent =
+    String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+// ── SWITCH ────────────────────────────────────────────────────
+let mapInit = false, splitMode = false;
+
+function sw(id, btn) {
+  document.querySelectorAll('.db').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+
+  if (splitMode) {
+    if (id === 'maps') { toggleSplit(); return; } // click maps → esci split
+    // cambia pannello destro
+    document.querySelectorAll('.view.sp-right').forEach(v => v.classList.remove('sp-right'));
+    document.getElementById('v-' + id).classList.add('sp-right');
+  } else {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on','sp-right'));
+    document.getElementById('v-' + id).classList.add('on');
+    if (id === 'maps' && !mapInit) initMap();
+    if (id !== 'maps') _lastApp = id; // ricorda ultima app per split
+  }
+}
+
+// ── SPLIT SCREEN ──────────────────────────────────────────────
+function toggleSplit() {
+  splitMode = !splitMode;
+  const area = document.getElementById('area');
+  const btn  = document.getElementById('split-btn');
+
+  if (splitMode) {
+    // Pulisci stato normale
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on','sp-right'));
+    document.querySelectorAll('.db').forEach(b => b.classList.remove('on'));
+
+    // Attiva split
+    area.classList.add('split');
+    btn.classList.add('on');
+
+    // Inizializza mappa se serve
+    if (!mapInit) initMap();
+
+    // Pannello destro default: musica (o ultima app attiva)
+    const rightId = _lastApp || 'music';
+    document.getElementById('v-' + rightId).classList.add('sp-right');
+    document.querySelector(`[data-v="${rightId}"]`)?.classList.add('on');
+
+    // Mapbox resize dopo il reflow CSS
+    setTimeout(() => map?.resize(), 120);
+
+  } else {
+    area.classList.remove('split');
+    btn.classList.remove('on');
+
+    // Pulisci classi split
+    document.querySelectorAll('.view.sp-right').forEach(v => v.classList.remove('sp-right'));
+
+    // Torna a maps singola
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+    document.querySelectorAll('.db').forEach(b => b.classList.remove('on'));
+    document.getElementById('v-maps').classList.add('on');
+    document.querySelector('[data-v="maps"]')?.classList.add('on');
+
+    setTimeout(() => map?.resize(), 120);
+  }
+}
+
+// Traccia ultima app visitata (per default pannello destro in split)
+let _lastApp = 'music';
+
+// ── TEMA GIORNO/NOTTE ─────────────────────────────────────────
+function toggleTheme() {
+  const light = document.documentElement.classList.toggle('light');
+  const btn   = document.getElementById('theme-btn');
+  btn.textContent = light ? '🌙' : '☀';
+  btn.classList.toggle('on', light);
+  localStorage.setItem('mg_light', light ? '1' : '0');
+  if (map) {
+    map.setStyle(light
+      ? 'mapbox://styles/mapbox/navigation-day-v1'
+      : 'mapbox://styles/mapbox/navigation-night-v1');
+    // ridisegna route dopo cambio stile
+    if (navSteps.length) map.once('style.load', () => {
+      const src = map.getSource('route');
+      if (src) { /* route già caricata, ridisegna layer */ }
+    });
+  }
+}
+
+// ── CONFIG ────────────────────────────────────────────────────
+function checkCfg() {
+  const mb = !!CFG.MAPBOX_TOKEN, sp = !!CFG.SPOTIFY_CLIENT_ID, ow = !!CFG.OPENWEATHER_KEY;
+  document.getElementById('cfg-mb').textContent = mb ? '✓' : '⚠ mancante';
+  document.getElementById('cfg-sp').textContent = sp ? '✓' : '⚠ mancante';
+  document.getElementById('cfg-ow').textContent = ow ? '✓' : '— opzionale';
+  if (!mb || !sp) document.getElementById('banner').style.display = 'flex';
+  if (!sp) document.getElementById('sp-warn').style.display = 'block';
+}
+
+// ── BADGES ────────────────────────────────────────────────────
+// Badge iPhone e BT: nessun click handler — aggiornati solo da hardware reale
+// (WebSocket Pi → updateBT, oppure Web Bluetooth → _btShowConnected/btOff)
+
+// ── MAPBOX ────────────────────────────────────────────────────
+let map, marker;
+// Carica Mapbox GL lazy (solo quando si apre la mappa)
+function loadMapbox() {
+  return new Promise(resolve => {
+    if (window.mapboxgl) { resolve(); return; }
+    const css = Object.assign(document.createElement('link'), {
+      rel:'stylesheet',
+      href:'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css'
+    });
+    document.head.appendChild(css);
+    const js = Object.assign(document.createElement('script'), {
+      src:'https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js',
+      async:true
+    });
+    js.onload = resolve;
+    document.head.appendChild(js);
+  });
+}
+
+async function initMap() {
+  mapInit = true;
+  if (!CFG.MAPBOX_TOKEN) return;
+
+  // Mostra spinner nella mappa mentre Mapbox scarica
+  const ph = document.getElementById('map-placeholder');
+  if (ph) ph.querySelector('p').textContent = 'Caricamento mappa...';
+
+  await loadMapbox();
+
+  document.getElementById('map-placeholder')?.remove();
+  mapboxgl.accessToken = CFG.MAPBOX_TOKEN;
+
+  const isDark = !document.documentElement.classList.contains('light');
+  map = new mapboxgl.Map({
+    container: 'mapbox-container',
+    style: isDark ? 'mapbox://styles/mapbox/navigation-night-v1'
+                  : 'mapbox://styles/mapbox/navigation-day-v1',
+    center: [9.19, 45.46], zoom: 4,   // zoom fuori — poi centra su GPS reale
+    attributionControl: false,
+  });
+  map.addControl(new mapboxgl.NavigationControl({ showCompass:true, showZoom:false }), 'top-right');
+
+  map.on('load', () => {
+    // Centra subito sulla posizione reale del browser
+    navigator.geolocation?.getCurrentPosition(pos => {
+      const { longitude:lng, latitude:lat } = pos.coords;
+      userPos = [lng, lat];
+      map.flyTo({ center:[lng,lat], zoom:16, speed:2 });
+      updateUserMarker(lng, lat, 0);
+    }, () => {}, { enableHighAccuracy:true, timeout:8000 });
+
+    // Watch continuo per aggiornamenti
+    navigator.geolocation?.watchPosition(pos => {
+      const { longitude:lng, latitude:lat, speed, heading, accuracy } = pos.coords;
+      userPos = [lng, lat];
+      const kmh = speed ? Math.round(speed * 3.6) : 0;
+
+      updateUserMarker(lng, lat, heading || 0);
+
+      // segui posizione solo in idle (non durante navigazione attiva)
+      if (!navSteps.length) {
+        map.easeTo({ center:[lng,lat], zoom:16, duration:800 });
+      }
+
+      // aggiorna stats GPS
+      document.getElementById('gps-spd').textContent = kmh ? kmh+' km/h' : '—';
+      document.getElementById('gps-hdg').textContent = heading ? Math.round(heading)+'°' : '—';
+      document.getElementById('gps-acc').textContent = accuracy ? Math.round(accuracy)+'m' : '—';
+
+      if (navSteps.length) {
+        checkStepAdvance([lng, lat]);
+        checkOffRoute([lng, lat]);
+      }
+    }, () => {}, { enableHighAccuracy:true, maximumAge:2000 });
+  });
+}
+
+// Marker utente con freccia di direzione
+function updateUserMarker(lng, lat, heading) {
+  if (marker) marker.remove();
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:20px;height:20px;';
+
+  // Freccia heading (solo se in movimento)
+  if (heading > 0) {
+    const arr = document.createElement('div');
+    arr.style.cssText = `
+      position:absolute;top:-9px;left:50%;margin-left:-4px;
+      width:0;height:0;
+      border-left:4px solid transparent;
+      border-right:4px solid transparent;
+      border-bottom:9px solid rgba(200,16,46,.75);
+    `;
+    wrap.appendChild(arr);
+    wrap.style.transform = `rotate(${heading}deg)`;
+  }
+
+  // Punto posizione
+  const dot = document.createElement('div');
+  dot.style.cssText = 'position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#C8102E;border:2.5px solid white;box-shadow:0 0 0 5px rgba(200,16,46,.18)';
+  wrap.appendChild(dot);
+
+  marker = new mapboxgl.Marker({ element:wrap, rotationAlignment:'map' })
+    .setLngLat([lng, lat])
+    .addTo(map);
+}
+
+// ── GEO STATUS ────────────────────────────────────────────────
+function initGeo() {
+  if (!navigator.geolocation) { document.getElementById('geo-s').textContent = 'Non supportata'; return; }
+  navigator.permissions?.query({ name:'geolocation' }).then(r => {
+    document.getElementById('geo-s').textContent =
+      r.state==='granted' ? '✓ Autorizzata' : r.state==='denied' ? '✗ Negata' : 'In attesa';
+  }).catch(() => { document.getElementById('geo-s').textContent = 'Disponibile'; });
+}
+
+// ── BLUETOOTH ─────────────────────────────────────────────────
+let btDev = null;
+function initBT() {
+  const ok = 'bluetooth' in navigator;
+  document.getElementById('bt-sup').textContent = ok ? '✓ Chrome' : '✗ Non supportato';
+  if (!ok) {
+    document.getElementById('bt-btn').style.display = 'none';
+    document.getElementById('bt-no').style.display = 'block';
+  }
+}
+function _updateAppTiles() {
+  // Badge BT sul tile interfono
+  const btBadge = document.getElementById('tile-bt-badge');
+  if (btBadge) btBadge.classList.toggle('show', !!btDev);
+  // Badge Spotify sul tile musica
+  const spBadge = document.getElementById('tile-music-badge');
+  if (spBadge) spBadge.classList.toggle('show', !!spToken);
+  // Tile interfono active se connesso
+  const tilebt = document.getElementById('tile-bt');
+  if (tilebt) tilebt.classList.toggle('active-tile', !!btDev);
+}
+
+function _btShowConnected(name) {
+  document.getElementById('bt-nm').textContent = name || 'Dispositivo BT';
+  document.getElementById('bt-st').textContent = 'CONNESSO';
+  document.getElementById('bt-st').style.color = 'var(--blue2)';
+  document.getElementById('bt-btn').textContent = 'DISCONNETTI';
+  document.getElementById('bt-btn').onclick = () => btDev?.gatt?.disconnect();
+  document.getElementById('bt-vol-row').style.display = 'block';
+  document.getElementById('bt-ch-row').style.display  = 'flex';
+  // badge status bar
+  document.getElementById('pill-ic').className = 'ind ind-bt';
+  document.getElementById('ic-lbl').textContent = name || 'BT';
+  // badge nel telefono
+  const via = document.getElementById('ph-via');
+  if (via) { via.style.display = 'flex'; document.getElementById('ph-bt-name').textContent = name || 'BT'; }
+  _updateAppTiles();
+}
+async function btConnect() {
+  if (!('bluetooth' in navigator)) return;
+  const btn = document.getElementById('bt-btn');
+  btn.disabled = true; btn.textContent = 'RICERCA...';
+  try {
+    btDev = await navigator.bluetooth.requestDevice({
+      acceptAllDevices:true,
+      optionalServices:['battery_service'],
+    });
+    btDev.addEventListener('gattserverdisconnected', btOff);
+    const srv = await btDev.gatt.connect();
+    _btShowConnected(btDev.name);
+    btn.disabled = false;
+    try {
+      const s = await srv.getPrimaryService('battery_service');
+      const c = await s.getCharacteristic('battery_level');
+      const v = await c.readValue();
+      document.getElementById('bt-nm').textContent = `${btDev.name||'BT'} · 🔋${v.getUint8(0)}%`;
+    } catch(_){}
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'CONNETTI INTERFONICO';
+    btn.onclick = btConnect;
+    if (e.name !== 'NotFoundError') alert(e.message);
+  }
+}
+function btOff() {
+  document.getElementById('bt-nm').textContent = 'Nessun dispositivo';
+  document.getElementById('bt-st').textContent = 'DISCONNESSO';
+  document.getElementById('bt-st').style.color = 'var(--text2)';
+  document.getElementById('bt-vol-row').style.display = 'none';
+  document.getElementById('bt-ch-row').style.display  = 'none';
+  document.getElementById('pill-ic').className = 'ind off';
+  document.getElementById('ic-lbl').textContent = '—';
+  const via = document.getElementById('ph-via');
+  if (via) via.style.display = 'none';
+  const btn = document.getElementById('bt-btn');
+  btn.textContent = 'CONNETTI'; btn.onclick = btConnect; btDev = null;
+  _updateAppTiles();
+}
+
+// ── VOLUME / CHANNELS ─────────────────────────────────────────
+function setVol(e) {
+  const t = document.getElementById('vt'), r = t.getBoundingClientRect();
+  const p = Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)), v = Math.round(p*100);
+  document.getElementById('vf').style.width  = v+'%';
+  document.getElementById('vk').style.left   = v+'%';
+  document.getElementById('vol-v').textContent = v+'%';
+}
+function setCh(b) { document.querySelectorAll('.ch').forEach(c=>c.classList.remove('on')); b.classList.add('on'); }
+
+// ── PHONE ─────────────────────────────────────────────────────
+let calling=false, dialStr='';
+function dial(k) {
+  if(calling) return;
+  if(document.getElementById('ph-nm').textContent==='Componi') {
+    document.getElementById('ph-nm').textContent='Chiama'; dialStr='';
+  }
+  dialStr+=k; document.getElementById('ph-dn').textContent=dialStr;
+}
+function simCall() {
+  if(!dialStr&&!calling) return;
+  calling=!calling;
+  const b=document.getElementById('call-b');
+  if(calling) { b.classList.add('active'); document.getElementById('ph-nm').textContent='In chiamata...'; }
+  else { b.classList.remove('active'); document.getElementById('ph-nm').textContent='Componi'; document.getElementById('ph-dn').textContent=''; dialStr=''; }
+}
+
+// ── SPOTIFY PKCE ─────────────────────────────────────────────
+let spPlayer=null, spToken=null;
+function checkSpotify() {
+  const t=localStorage.getItem('sp_token'), exp=+localStorage.getItem('sp_exp')||0;
+  if(t && Date.now()<exp) { spToken=t; showPlayer(); }
+}
+async function connectSpotify() {
+  if(!CFG.SPOTIFY_CLIENT_ID) { alert('Aggiungi SPOTIFY_CLIENT_ID in config.js'); return; }
+  if(location.protocol==='file:') { alert('OAuth richiede server locale.\nEsegui start.bat'); return; }
+  const v=rnd(64), ch=await pkce(v);
+  localStorage.setItem('sp_ver',v);
+  window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({
+    response_type:'code',client_id:CFG.SPOTIFY_CLIENT_ID,scope:CFG.SPOTIFY_SCOPES,
+    redirect_uri:CFG.REDIRECT_URI,code_challenge_method:'S256',code_challenge:ch
+  });
+}
+function showPlayer() {
+  document.getElementById('sp-connect').style.display='none';
+  document.getElementById('sp-player').style.display='flex';
+  loadSDK();
+}
+function spDisconnect() {
+  ['sp_token','sp_refresh','sp_exp'].forEach(k=>localStorage.removeItem(k));
+  spPlayer?.disconnect(); spPlayer=null; spToken=null;
+  document.getElementById('sp-connect').style.display='flex';
+  document.getElementById('sp-player').style.display='none';
+}
+function loadSDK() {
+  if(document.getElementById('sp-sdk')) { initPlayer(); return; }
+  window.onSpotifyWebPlaybackSDKReady=initPlayer;
+  const s=Object.assign(document.createElement('script'),{id:'sp-sdk',src:'https://sdk.scdn.co/spotify-player.js'});
+  document.head.appendChild(s);
+}
+function initPlayer() {
+  spPlayer=new Spotify.Player({ name:'MotoPlay · Moto Guzzi', getOAuthToken:cb=>cb(spToken), volume:.7 });
+  spPlayer.addListener('ready',({device_id})=>{ spFetch('PUT','https://api.spotify.com/v1/me/player',{device_ids:[device_id],play:false}); fetchNow(); setInterval(fetchNow,5000); });
+  spPlayer.addListener('player_state_changed',s=>s&&updateUI(s));
+  spPlayer.connect();
+}
+async function fetchNow() {
+  const d=await spFetch('GET','https://api.spotify.com/v1/me/player/currently-playing');
+  if(!d||!d.item) return; const {item,is_playing,progress_ms}=d;
+  setTrack(item.name, item.artists.map(a=>a.name).join(', ')+' · '+item.album.name,
+    item.album.images[0]?.url, Math.round(progress_ms/item.duration_ms*100),
+    progress_ms, item.duration_ms, is_playing);
+}
+function updateUI(s) {
+  const {paused,position,duration,track_window:{current_track:t}}=s;
+  setTrack(t.name, t.artists.map(a=>a.name).join(', '), null,
+    duration?Math.round(position/duration*100):0, position, duration, !paused);
+}
+function setTrack(title,artist,art,pct,pos,dur,playing) {
+  document.getElementById('sp-t').textContent=title;
+  document.getElementById('sp-a').textContent=artist;
+  document.getElementById('sp-prog').style.width=pct+'%';
+  document.getElementById('sp-pos').textContent=ms(pos);
+  document.getElementById('sp-dur').textContent=ms(dur);
+  const ico=document.getElementById('sp-ico');
+  ico.setAttribute('points', playing ? '6 19 6 5 19 12 6 19' : '5 3 19 12 5 21 5 3');
+  if(art) {
+    const i=document.getElementById('art-img');
+    i.src=art; i.style.display='block';
+    document.getElementById('art-fb').style.display='none';
+  }
+  // tint music background per album mood
+  const hue=title.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%360;
+  document.getElementById('v-music').style.background=
+    `radial-gradient(ellipse at 50% 25%, hsl(${hue},40%,12%), #030303)`;
+}
+async function spToggle(){ await spPlayer?.togglePlay(); }
+async function spPrev()  { await spPlayer?.previousTrack(); }
+async function spNext()  { await spPlayer?.nextTrack(); }
+async function spFetch(m,u,b) {
+  try {
+    const r=await fetch(u,{method:m,headers:{'Authorization':'Bearer '+spToken,'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
+    if(r.status===401){spDisconnect();return null}
+    if(r.status===204||r.status===202) return null;
+    return r.json();
+  } catch{return null}
+}
+function rnd(n) {
+  const a=new Uint8Array(n); crypto.getRandomValues(a);
+  return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function pkce(v) {
+  const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));
+  return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+function ms(m) { const s=Math.floor(m/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+
+// ── WEBSOCKET ─────────────────────────────────────────────────
+let ws = null, wsRetry = null, wsLive = false;
+
+function wsConnect() {
+  if (ws?.readyState === WebSocket.OPEN) return;
+  // Usa stesso host + protocollo (wss:// su HTTPS, ws:// su HTTP)
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${wsProto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    wsLive = true; clearTimeout(wsRetry);
+    setWsStatus('live');
+    log('WebSocket connesso — dati LIVE');
+  };
+
+  ws.onmessage = ({ data }) => {
+    try { handleWsMsg(JSON.parse(data)); } catch(_) {}
+  };
+
+  ws.onclose = ws.onerror = () => {
+    wsLive = false;
+    setWsStatus('demo');
+    wsRetry = setTimeout(wsConnect, 4000);  // riprova ogni 4s
+  };
+}
+
+function setWsStatus(mode) {
+  // Mostra badge SOLO quando connesso a Pi hardware reale
+  // In browser/simulazione: badge nascosto — nessun rumore visivo
+  const wrap = document.getElementById('ws-badge');
+  if (!wrap) return;
+  if (mode === 'live' && !_wsSimulated) {
+    wrap.style.display = 'flex';
+    document.getElementById('ws-dot').style.background = 'var(--green2)';
+    document.getElementById('ws-dot').style.boxShadow  = '0 0 6px var(--green2)';
+    document.getElementById('ws-label').textContent    = 'LIVE';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+function log(msg) { /* console.info('[MotoPlay]', msg); */ }
+
+function handleWsMsg(msg) {
+  switch (msg.type) {
+    case 'status':
+      log(`Server: ${msg.hardware} v${msg.version}`);
+      _wsSimulated = msg.hardware !== 'pi';
+      setWsStatus('live'); // rivaluta ora che sappiamo se è Pi o sim
+      break;
+
+    case 'gps':
+      updateGPS(msg);
+      break;
+
+    case 'obd':
+      updateOBD(msg);
+      break;
+
+    case 'bt':
+      updateBT(msg);
+      break;
+
+    case 'btn':
+      handleHWButton(msg.button);
+      break;
+
+    case 'call':
+      handleCall(msg);
+      break;
+  }
+}
+
+// ── GPS dal server ────────────────────────────────────────────
+function updateGPS(g) {
+  if (g.sim) return; // PC: ignora tutto, nessun dato simulato sulla UI
+  // GPS reale (Raspberry Pi con hardware)
+  userPos = [g.lng, g.lat];
+  if (map) {
+    updateUserMarker(g.lng, g.lat, g.heading || 0);
+    if (!navSteps.length) map.easeTo({ center:[g.lng, g.lat], zoom:16, duration:800 });
+  }
+  document.getElementById('gps-spd').textContent = g.speed ? Math.round(g.speed)+' km/h' : '—';
+  document.getElementById('gps-hdg').textContent = g.heading ? Math.round(g.heading)+'°' : '—';
+  document.getElementById('gps-acc').textContent = g.accuracy ? Math.round(g.accuracy)+'m' : '—';
+  if (navSteps.length) {
+    checkStepAdvance([g.lng, g.lat]);
+    checkOffRoute([g.lng, g.lat]);
+  }
+}
+
+// ── OBD dal server ────────────────────────────────────────────
+const GEAR_LABEL = ['N','1','2','3','4','5','6'];
+let _wsSimulated = true; // true finché non riceviamo hardware reale
+
+function updateOBD(o) {
+  const ov = document.getElementById('obd-overlay');
+  if (!ov) return;
+  // Mostra overlay: LIVE = dati reali, SIM = dati simulati con badge
+  // Su browser/iPhone: nascondi overlay OBD (nessun dato reale senza Pi)
+  if (_wsSimulated) { ov.style.display = 'none'; return; }
+  ov.style.display = 'flex';
+  ov.style.opacity = '1';
+  if (ov) {
+    document.getElementById('obd-spd').textContent  = o.speed  || '—';
+    document.getElementById('obd-gear').textContent = GEAR_LABEL[o.gear] ?? 'N';
+    document.getElementById('obd-rpm').textContent  = o.rpm    ? (o.rpm/1000).toFixed(1)+'k' : '—';
+    document.getElementById('obd-tmp').textContent  = o.temp   ? Math.round(o.temp)+'°' : '—';
+    document.getElementById('obd-fuel').textContent = o.fuel   ? Math.round(o.fuel)+'%' : '—';
+
+    // colora temp se alta
+    const tmpEl = document.getElementById('obd-tmp');
+    tmpEl.style.color = o.temp > 100 ? '#ff4444' : o.temp > 92 ? '#ffaa00' : '';
+
+    // colora carburante se basso
+    const fuelEl = document.getElementById('obd-fuel');
+    fuelEl.style.color = o.fuel < 15 ? '#ff4444' : o.fuel < 25 ? '#ffaa00' : '';
+  }
+}
+
+// ── BT dal server ─────────────────────────────────────────────
+function updateBT(b) {
+  if (_wsSimulated) return;
+  // Telefono
+  const pPill = document.getElementById('pill-ph');
+  if (b.phone) {
+    pPill.className = 'ind ind-ph';
+    document.getElementById('ph-lbl').textContent = b.phone_name || 'Telefono';
+  } else {
+    pPill.className = 'ind off';
+    document.getElementById('ph-lbl').textContent = '—';
+  }
+  // Interfonico
+  if (b.intercom) {
+    _btShowConnected(b.intercom_name);
+  } else {
+    btOff();
+  }
+}
+
+// ── Pulsanti hardware ESP32 ───────────────────────────────────
+function handleHWButton(btn) {
+  if (btn === 'prev')  spPrev();
+  if (btn === 'next')  spNext();
+  if (btn === 'call')  simCall();
+}
+
+// ── Chiamata in arrivo ────────────────────────────────────────
+function handleCall(c) {
+  const overlay = document.getElementById('call-overlay');
+  if (!overlay) return;
+  if (c.state === 'incoming') {
+    document.getElementById('call-overlay-name').textContent   = c.name   || 'Sconosciuto';
+    document.getElementById('call-overlay-number').textContent = c.number || '';
+    overlay.style.display = 'flex';
+  } else {
+    overlay.style.display = 'none';
+  }
+}
+
+function wsSend(obj) {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+// Avvia connessione WebSocket al caricamento
+wsConnect();
+
+// ── WAKE LOCK ─────────────────────────────────────────────────
+let _wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+  } catch(_) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !_wakeLock) requestWakeLock();
+});
+
+// ── VOICE TTS ─────────────────────────────────────────────────
+let _voiceOn   = localStorage.getItem('mg_voice') !== '0';
+let _lastSpoke = '';
+let _voices    = [];
+
+// Carica voci disponibili (async in alcuni browser)
+if (window.speechSynthesis) {
+  const loadV = () => { _voices = window.speechSynthesis.getVoices(); };
+  loadV();
+  window.speechSynthesis.onvoiceschanged = loadV;
+}
+
+function speak(text, force = false) {
+  if (!_voiceOn && !force) return;
+  if (!text || !window.speechSynthesis) return;
+  if (text === _lastSpoke && !force) return;
+  _lastSpoke = text;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang   = 'it-IT';
+  u.rate   = 1.05;
+  u.volume = 1.0;
+  const itVoice = _voices.find(v => v.lang.startsWith('it'));
+  if (itVoice) u.voice = itVoice;
+  window.speechSynthesis.speak(u);
+}
+
+function toggleVoice() {
+  _voiceOn = !_voiceOn;
+  localStorage.setItem('mg_voice', _voiceOn ? '1' : '0');
+  const btn = document.getElementById('voice-btn');
+  btn.classList.toggle('on', _voiceOn);
+  btn.title = _voiceOn ? 'Voce attiva — clicca per disattivare' : 'Voce disattiva — clicca per attivare';
+  if (_voiceOn) speak('Voce navigazione attiva', true);
+}
+
+// Init stato icona voce
+document.getElementById('voice-btn').classList.toggle('on', _voiceOn);
+
+// ── METEO ─────────────────────────────────────────────────────
+const W_ICONS = {
+  2:'⛈', 3:'🌦', 5:'🌧', 6:'❄', 7:'🌫',
+  800:'☀', 801:'🌤', 802:'⛅', 803:'🌥', 804:'☁'
+};
+function wIcon(code) {
+  return W_ICONS[code] || W_ICONS[String(code)[0]] || '🌡';
+}
+
+let _weatherTimer = null;
+async function fetchWeather(lat, lng) {
+  const key = CFG.OPENWEATHER_KEY;
+  if (!key) return;
+  try {
+    const r = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${key}&units=metric&lang=it`
+    );
+    if (!r.ok) return;
+    const d = await r.json();
+    const temp   = Math.round(d.main.temp);
+    const icon   = wIcon(d.weather[0].id);
+    const desc   = d.weather[0].description;
+    const wind   = Math.round((d.wind?.speed || 0) * 3.6);
+    const rain   = d.rain?.['1h'] || 0;
+    const feels  = Math.round(d.main.feels_like);
+
+    // Widget status bar
+    const w = document.getElementById('weather-widget');
+    w.style.display = 'flex';
+    w.innerHTML = `<span id="w-icon" style="font-size:14px">${icon}</span>
+      <span style="font-family:var(--fm);font-size:11px;color:var(--text2)">${temp}°</span>`;
+    w.title = `${desc} · percepita ${feels}° · vento ${wind} km/h`;
+
+    // Aggiorna settings
+    const cfgOw = document.getElementById('cfg-ow');
+    if (cfgOw) cfgOw.textContent = '✓';
+
+    // Avvisi vocali durante navigazione
+    if (navSteps.length) {
+      if (rain > 0.5) speak(`Attenzione pioggia in corso: ${desc}`);
+      else if (wind > 55) speak(`Vento forte: ${wind} chilometri orari`);
+    }
+  } catch(_) {}
+}
+
+function initWeather() {
+  if (!CFG.OPENWEATHER_KEY) return;
+  // Prima chiamata appena disponibile GPS, poi ogni 5 minuti
+  const doFetch = () => { if (userPos) fetchWeather(userPos[1], userPos[0]); };
+  doFetch();
+  _weatherTimer = setInterval(doFetch, 5 * 60 * 1000);
+}
+
+// ── SOS EMERGENZA ─────────────────────────────────────────────
+let _sosTimer = null, _sosN = 3;
+
+function sosStart(e) {
+  if (e) e.preventDefault();
+  _sosN = 3;
+  document.getElementById('sos-count').textContent = _sosN;
+  document.getElementById('sos-overlay').style.display = 'flex';
+  document.getElementById('sos-btn').classList.add('armed');
+  _sosTimer = setInterval(() => {
+    _sosN--;
+    document.getElementById('sos-count').textContent = _sosN;
+    if (_sosN <= 0) { sosCancel(); sosSend(); }
+  }, 1000);
+}
+
+function sosCancel() {
+  clearInterval(_sosTimer); _sosTimer = null;
+  document.getElementById('sos-overlay').style.display = 'none';
+  document.getElementById('sos-btn').classList.remove('armed');
+}
+
+function sosSend() {
+  const pos = userPos;
+  if (!pos) { alert('GPS non disponibile — impossibile inviare SOS'); return; }
+  const [lng, lat] = pos;
+  const contact = localStorage.getItem('mg_sos_contact') || CFG.SOS_CONTACT || '';
+  const time    = new Date().toLocaleString('it-IT');
+  const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+  const msg     = `🆘 SOS MotoPlay\nPosizione: ${mapsUrl}\nData/ora: ${time}\n\nInviato automaticamente da MotoPlay`;
+
+  // WhatsApp (apre wa.me con messaggio precompilato)
+  const num = contact.replace(/[^\d+]/g, '');
+  window.open(
+    num ? `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
+        : `https://wa.me/?text=${encodeURIComponent(msg)}`,
+    '_blank'
+  );
+
+  // SMS come fallback (funziona su mobile)
+  setTimeout(() => {
+    window.location.href = `sms:${contact}?&body=${encodeURIComponent(msg)}`;
+  }, 800);
+}
+
+// Precarica contatto SOS dal localStorage
+const sosInput = document.getElementById('sos-input');
+if (sosInput) sosInput.value = localStorage.getItem('mg_sos_contact') || CFG.SOS_CONTACT || '';
+
+// ── SERVICE WORKER (PWA) ──────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(r => log('SW registrato: ' + r.scope))
+    .catch(e => log('SW errore: ' + e));
+}
+
+// ── NAVIGAZIONE A→B ──────────────────────────────────────────
+let userPos  = null;   // [lng, lat] GPS corrente
+let navSteps = [];     // array step Directions API
+let navIdx   = 0;      // step corrente
+let searchTimer = null;
+
+// arrow per ogni tipo di manovra
+const ARROWS = {
+  'turn-left':          { icon:'←', cls:'' },
+  'turn-right':         { icon:'→', cls:'' },
+  'sharp-left':         { icon:'↰', cls:'' },
+  'sharp-right':        { icon:'↱', cls:'' },
+  'slight-left':        { icon:'↖', cls:'' },
+  'slight-right':       { icon:'↗', cls:'' },
+  'straight':           { icon:'↑', cls:'' },
+  'uturn':              { icon:'↩', cls:'warn' },
+  'roundabout':         { icon:'↺', cls:'' },
+  'rotary':             { icon:'↺', cls:'' },
+  'roundabout exit':    { icon:'↗', cls:'' },
+  'arrive':             { icon:'⬤', cls:'dest' },
+  'depart':             { icon:'↑', cls:'' },
+};
+
+function onDestInput(val) {
+  const clear = document.getElementById('dest-clear');
+  clear.style.display = val ? 'block' : 'none';
+  clearTimeout(searchTimer);
+  if (!val.trim()) { hideResults(); return; }
+  searchTimer = setTimeout(() => geocode(val), 380);
+}
+
+async function geocode(query) {
+  if (!CFG.MAPBOX_TOKEN) return;
+  const prox = userPos ? `${userPos[0]},${userPos[1]}` : '9.19,45.46';
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?`+
+    new URLSearchParams({ access_token:CFG.MAPBOX_TOKEN, language:'it', limit:5, proximity:prox });
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    showResults(d.features || []);
+  } catch(e) { hideResults(); }
+}
+
+function showResults(features) {
+  const box = document.getElementById('dest-results');
+  if (!features.length) { hideResults(); return; }
+  box.style.display = 'block';
+  box.innerHTML = features.map((f,i) => `
+    <div class="dr" onclick="selectDest(${i})">
+      <div class="dr-name">${f.text}</div>
+      <div class="dr-sub">${f.place_name.replace(f.text+', ','')}</div>
+    </div>`).join('');
+  box._features = features;
+}
+
+function hideResults() {
+  const b = document.getElementById('dest-results');
+  b.style.display = 'none'; b.innerHTML = '';
+}
+
+async function selectDest(idx) {
+  const feat = document.getElementById('dest-results')._features[idx];
+  const dest = feat.center;
+  const name = feat.place_name;
+  document.getElementById('dest-input').value = feat.text;
+  document.getElementById('dest-clear').style.display = 'block';
+  hideResults();
+
+  if (!userPos) {
+    // Prova a ottenere GPS prima di procedere
+    showSearchLoading('Acquisisco GPS...');
+    navigator.geolocation?.getCurrentPosition(pos => {
+      userPos = [pos.coords.longitude, pos.coords.latitude];
+      hideSearchLoading();
+      startNav(userPos, dest, name);
+    }, () => {
+      hideSearchLoading();
+      alert('GPS non disponibile.\nControlla i permessi del browser.');
+    }, { enableHighAccuracy:true, timeout:8000 });
+    return;
+  }
+  await startNav(userPos, dest, name);
+}
+
+function showSearchLoading(msg) {
+  const inp = document.getElementById('dest-input');
+  inp.value = msg; inp.disabled = true;
+  document.getElementById('dest-clear').style.display = 'none';
+}
+function hideSearchLoading() {
+  const inp = document.getElementById('dest-input');
+  inp.value = ''; inp.disabled = false;
+}
+
+// Chiudi risultati cliccando fuori
+document.addEventListener('click', e => {
+  if (!e.target.closest('#map-search') && !e.target.closest('#dest-results')) {
+    hideResults();
+  }
+});
+
+async function startNav(origin, dest, destName) {
+  if (!CFG.MAPBOX_TOKEN || !map) return;
+  // Memorizza destinazione per rerouting
+  window._destCoords = dest;
+  window._destName   = destName;
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin[0]},${origin[1]};${dest[0]},${dest[1]}?`+
+    new URLSearchParams({
+      access_token: CFG.MAPBOX_TOKEN,
+      geometries:   'geojson',
+      steps:        true,
+      language:     'it',
+      overview:     'full',
+    });
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (!d.routes?.length) { alert('Percorso non trovato.'); return; }
+    const route = d.routes[0];
+    navSteps = route.legs[0].steps;
+    navIdx   = 0;
+
+    // disegna percorso
+    const geom = route.geometry;
+    if (map.getSource('route')) {
+      map.getSource('route').setData({ type:'Feature', geometry:geom });
+    } else {
+      map.addSource('route', { type:'geojson', data:{ type:'Feature', geometry:geom } });
+      map.addLayer({ id:'route-case', type:'line', source:'route',
+        layout:{'line-join':'round','line-cap':'round'},
+        paint:{'line-color':'#700010','line-width':9,'line-opacity':.5} });
+      map.addLayer({ id:'route-line', type:'line', source:'route',
+        layout:{'line-join':'round','line-cap':'round'},
+        paint:{'line-color':'#C8102E','line-width':5,'line-opacity':.95} });
+    }
+
+    // marker destinazione
+    if (window._destMarker) window._destMarker.remove();
+    const el = Object.assign(document.createElement('div'), {
+      style:'width:16px;height:16px;border-radius:50%;background:#C8102E;border:3px solid white;box-shadow:0 0 0 5px rgba(200,16,46,.2)'
+    });
+    window._destMarker = new mapboxgl.Marker({ element:el }).setLngLat(dest).addTo(map);
+
+    // fit bounds
+    const coords = geom.coordinates;
+    const bounds = coords.reduce((b,c) => b.extend(c), new mapboxgl.LngLatBounds(coords[0],coords[0]));
+    map.fitBounds(bounds, { padding:{ top:100, bottom:100, left:40, right:40 }, duration:800 });
+
+    // Annuncio vocale partenza
+    const totalKm  = (route.distance / 1000).toFixed(1);
+    const totalMin = Math.round(route.duration / 60);
+    speak(`Navigazione avviata. ${totalKm} chilometri, circa ${totalMin} minuti verso ${destName}`);
+
+    // ETA
+    const mins  = totalMin;
+    const km    = totalKm;
+    const eta   = new Date(Date.now() + route.duration * 1000);
+    const etaStr= String(eta.getHours()).padStart(2,'0')+':'+String(eta.getMinutes()).padStart(2,'0');
+    document.getElementById('nav-eta').textContent = etaStr;
+    document.getElementById('nav-km').textContent  = km+' km';
+    document.getElementById('nav-min').textContent = mins+' min';
+
+    // attiva UI navigazione
+    document.getElementById('map-search').style.display = 'none';
+    document.getElementById('nav-card').style.display   = 'flex';
+    document.getElementById('gps-bot').style.display    = 'none';
+    document.getElementById('nav-bot').style.display    = 'flex';
+
+    updateStep(0);
+  } catch(e) { alert('Errore routing: '+e.message); }
+}
+
+function updateStep(idx) {
+  if (!navSteps.length) return;
+  const step = navSteps[Math.min(idx, navSteps.length-1)];
+  const man  = step.maneuver;
+  const mod  = man.modifier || man.type || 'straight';
+  const key  = (man.type === 'arrive') ? 'arrive' : mod;
+  const arr  = ARROWS[key] || ARROWS['straight'];
+
+  const arrEl = document.getElementById('nav-arr');
+  arrEl.textContent  = arr.icon;
+  arrEl.className    = 'nav-arr' + (arr.cls ? ' '+arr.cls : '');
+
+  const instr = man.instruction || '';
+  document.getElementById('nav-ins').textContent = instr || '—';
+
+  // Voce: annuncia istruzione con distanza
+  const dist = step.distance;
+  if (instr) {
+    const dText = dist >= 1000
+      ? `Tra ${(dist/1000).toFixed(1)} chilometri`
+      : dist > 50 ? `Tra ${Math.round(dist)} metri` : '';
+    speak(dText ? `${dText}, ${instr}` : instr);
+  document.getElementById('nav-dist').textContent = dist >= 1000 ? (dist/1000).toFixed(1) : Math.round(dist);
+  document.getElementById('nav-du').textContent   = dist >= 1000 ? 'km' : 'm';
+
+  const nextStep = navSteps[idx+1];
+  }
+
+  document.getElementById('nav-rd').textContent = nextStep
+    ? 'poi: ' + (nextStep.maneuver.instruction||'').slice(0,40)
+    : step.name || '';
+
+  // Annuncio arrivo
+  if (man.type === 'arrive') speak('Sei arrivato a destinazione', true);
+}
+
+function checkStepAdvance(pos) {
+  if (!navSteps.length || navIdx >= navSteps.length - 1) return;
+
+  // Guarda avanti fino a 4 step: avanza al più vicino che sia < soglia
+  const THRESHOLD = 35; // metri
+  let advanced = false;
+  for (let i = navIdx; i < Math.min(navIdx + 4, navSteps.length - 1); i++) {
+    const d = haversine(pos, navSteps[i + 1].maneuver.location);
+    if (haversine(pos, navSteps[i].maneuver.location) < THRESHOLD) {
+      navIdx = i + 1;
+      updateStep(navIdx);
+      advanced = true;
+      break;
+    }
+  }
+
+  // Aggiorna distanza alla prossima manovra
+  const remaining = haversine(pos, navSteps[navIdx].maneuver.location);
+  document.getElementById('nav-dist').textContent =
+    remaining >= 1000 ? (remaining / 1000).toFixed(1) : Math.round(remaining);
+  document.getElementById('nav-du').textContent = remaining >= 1000 ? 'km' : 'm';
+
+  // Avviso sonoro se manovra imminente (< 80m)
+  if (!advanced && remaining < 80) {
+    document.getElementById('nav-arr').style.animation = 'navPulse .4s ease 2';
+  }
+}
+
+// Off-route detection + auto rerouting
+let _rerouteTimer = null, _lastOffRoute = 0;
+function checkOffRoute(pos) {
+  if (!navSteps.length || !window._destCoords) return;
+  const d = haversine(pos, navSteps[navIdx].maneuver.location);
+  const now = Date.now();
+  if (d > 180 && now - _lastOffRoute > 15000) {
+    _lastOffRoute = now;
+    clearTimeout(_rerouteTimer);
+    showNavStatus('Ricalcolo percorso...');
+    _rerouteTimer = setTimeout(async () => {
+      await startNav(pos, window._destCoords, window._destName || 'Destinazione');
+    }, 2000);
+  }
+}
+
+function showNavStatus(msg) {
+  document.getElementById('nav-rd').textContent = msg;
+  document.getElementById('nav-rd').style.color = 'var(--accent)';
+  setTimeout(() => { document.getElementById('nav-rd').style.color = ''; }, 3000);
+  if (msg.includes('Ricalcolo')) speak('Ricalcolo percorso in corso');
+}
+
+function haversine([lng1,lat1], [lng2,lat2]) {
+  const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function stopNav() {
+  navSteps = []; navIdx = 0;
+  clearTimeout(_rerouteTimer); _rerouteTimer = null;
+  window._destCoords = null; window._destName = null;
+
+  if (map) {
+    ['route-line','route-case'].forEach(id => {
+      try { map.removeLayer(id); } catch(_) {}
+    });
+    try { map.removeSource('route'); } catch(_) {}
+    window._destMarker?.remove(); window._destMarker = null;
+    // Ri-centra su posizione utente
+    if (userPos) map.flyTo({ center:userPos, zoom:16, duration:1000 });
+  }
+
+  document.getElementById('map-search').style.display = 'flex';
+  document.getElementById('nav-card').style.display   = 'none';
+  document.getElementById('gps-bot').style.display    = 'flex';
+  document.getElementById('nav-bot').style.display    = 'none';
+  document.getElementById('dest-input').value         = '';
+  document.getElementById('dest-clear').style.display = 'none';
+}
+
+function clearDest() {
+  document.getElementById('dest-input').value = '';
+  document.getElementById('dest-clear').style.display = 'none';
+  hideResults();
+  if (navSteps.length) stopNav();
+}
+
+// ── BACKGROUND THEMES ─────────────────────────────────────────
+// ripristina tema chiaro se salvato
+if (localStorage.getItem('mg_light') === '1') {
+  document.documentElement.classList.add('light');
+  document.getElementById('theme-btn').textContent = '🌙';
+  document.getElementById('theme-btn').classList.add('on');
+}
+
+const THEMES = [
+  { id:'day',     name:'Giorno',  bg:'#f0ede8', s1:'rgba(0,0,0,.05)',      bar:'rgba(240,237,232,.96)', light:true },
+  { id:'noir',    name:'Noir',    bg:'#030303', s1:'rgba(255,255,255,.04)', bar:'rgba(3,3,3,.95)'    },
+  { id:'charcoal',name:'Carbon',  bg:'#0d0b09', s1:'rgba(255,255,255,.05)', bar:'rgba(13,11,9,.95)'  },
+  { id:'navy',    name:'Navy',    bg:'#030810', s1:'rgba(100,140,255,.06)', bar:'rgba(3,8,16,.95)'   },
+  { id:'racing',  name:'Racing',  bg:'#0d0204', s1:'rgba(200,16,46,.05)',   bar:'rgba(13,2,4,.95)'   },
+  { id:'forest',  name:'Forest',  bg:'#030a04', s1:'rgba(60,180,80,.05)',   bar:'rgba(3,10,4,.95)'   },
+  { id:'slate',   name:'Slate',   bg:'#07080d', s1:'rgba(180,190,220,.04)', bar:'rgba(7,8,13,.95)'   },
+  { id:'espresso',name:'Espresso',bg:'#0a0806', s1:'rgba(255,200,100,.04)', bar:'rgba(10,8,6,.95)'   },
+];
+
+function applyTheme(t) {
+  const r = document.documentElement.style;
+  // tema giorno: usa la classe .light invece di forzare variabili
+  if (t.light) {
+    document.documentElement.classList.add('light');
+    document.getElementById('theme-btn').textContent = '🌙';
+    document.getElementById('theme-btn').classList.add('on');
+    localStorage.setItem('mg_light','1');
+    if (map) map.setStyle('mapbox://styles/mapbox/navigation-day-v1');
+  } else {
+    // rimuovi light se era attiva
+    document.documentElement.classList.remove('light');
+    document.getElementById('theme-btn').textContent = '☀';
+    document.getElementById('theme-btn').classList.remove('on');
+    localStorage.setItem('mg_light','0');
+    // applica bg personalizzato
+    r.setProperty('--bg',  t.bg);
+    r.setProperty('--s1',  t.s1);
+    r.setProperty('--bg1', shiftHex(t.bg, 8));
+    r.setProperty('--bg2', shiftHex(t.bg, 14));
+    r.setProperty('--bg3', shiftHex(t.bg, 22));
+    document.getElementById('bar').style.background  = t.bar;
+    document.getElementById('dock').style.background = t.bar;
+    if (map) map.setStyle('mapbox://styles/mapbox/navigation-night-v1');
+  }
+  localStorage.setItem('mg_theme', t.id);
+  document.querySelectorAll('.bg-sw').forEach(s => s.classList.toggle('on', s.dataset.id === t.id));
+}
+
+function shiftHex(hex, amount) {
+  const n = parseInt(hex.replace('#',''), 16);
+  const r = Math.min(255, ((n>>16)&0xff) + amount);
+  const g = Math.min(255, ((n>>8) &0xff) + amount);
+  const b = Math.min(255, ( n     &0xff) + amount);
+  return '#' + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+function initThemes() {
+  const grid = document.getElementById('bg-grid');
+  const saved = localStorage.getItem('mg_theme') || 'noir';
+  THEMES.forEach(t => {
+    const sw = document.createElement('div');
+    sw.className = 'bg-sw' + (t.id === saved ? ' on' : '');
+    sw.dataset.id   = t.id;
+    sw.dataset.name = t.name;
+    sw.style.background = t.bg;
+    sw.style.border = '1px solid rgba(255,255,255,.1)';
+    sw.title = t.name;
+    sw.onclick = () => applyTheme(t);
+    grid.appendChild(sw);
+  });
+  const current = THEMES.find(t => t.id === saved) || THEMES[0];
+  if (saved !== 'noir') applyTheme(current);
+}
+initThemes();
+</script>
+</body>
+</html>
