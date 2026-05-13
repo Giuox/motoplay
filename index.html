@@ -46,9 +46,48 @@
 }
 
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--fd)}
-/* iOS safe area */
-#bar{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right));padding-top:env(safe-area-inset-top);height:calc(44px + env(safe-area-inset-top))}
-#dock{padding-bottom:env(safe-area-inset-bottom);height:calc(66px + env(safe-area-inset-bottom))}
+/* iOS safe area + layout base */
+#bar {
+  padding-left:  max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
+  padding-top:   env(safe-area-inset-top);
+  height: calc(44px + env(safe-area-inset-top));
+  flex-shrink: 0;
+}
+#dock {
+  padding-left:  max(4px, env(safe-area-inset-left));
+  padding-right: max(4px, env(safe-area-inset-right));
+  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(62px + env(safe-area-inset-bottom));
+}
+
+/* ── Schermi stretti ≤430px (iPhone 13 portrait = 390px) ── */
+@media (max-width: 430px) {
+  /* Dock: nascondi label, riduci icone */
+  .dl          { display: none; }
+  .db-ico      { width: 20px; height: 20px; }
+  .db-ico svg  { width: 18px; height: 18px; }
+  #dock        { height: calc(54px + env(safe-area-inset-bottom)); }
+
+  /* Status bar: riduci elementi */
+  .bar-t       { font-size: 14px; }
+  .bar-logo    { font-size: 13px; }
+  #sos-btn     { font-size: 8px; padding: 2px 5px; }
+  .ind         { padding: 2px 7px; font-size: 8px; }
+  #ws-badge    { display: none !important; }
+  .bar-btn     { font-size: 13px; padding: 3px 4px; }
+
+  /* View: padding ridotto */
+  .view        { padding: 12px 12px 10px; }
+  .vtag        { margin-bottom: 10px; }
+
+  /* Splash: scala font */
+  .sp-wordrow  { font-size: clamp(28px, 9vw, 48px); }
+}
+
+@media (max-width: 390px) {
+  .ind span:last-child { display: none; } /* nascondi nome device, solo dot */
+}
 
 /* grain */
 body::after{
@@ -592,59 +631,8 @@ input[type=range]::-webkit-slider-thumb{
 .obd-val.big{font-size:22px;color:var(--accent)}
 :root.light #obd-overlay{background:rgba(245,243,240,.88)}
 
-/* ── SPLIT SCREEN ── */
-
-/* In split: #area diventa flex row, le view escono dall'absolute stacking */
-#area.split {
-  display:flex !important;
-  flex-direction:row !important;
-}
-
-/* Tutte le view: tornano nel flusso ma invisibili (width:0) */
-#area.split > .view {
-  position:relative !important;
-  inset:auto !important;
-  flex-shrink:0;
-  width:0 !important;
-  min-width:0 !important;
-  overflow:hidden;
-  opacity:0 !important;
-  pointer-events:none !important;
-  transform:none !important;
-  padding:0 !important;
-  display:flex !important;    /* mantiene display flex ma width:0 la nasconde */
-}
-
-/* Mappa: sempre visibile a sinistra (42%) */
-#area.split > #v-maps {
-  width:42% !important;
-  min-width:42% !important;
-  max-width:42% !important;
-  opacity:1 !important;
-  pointer-events:all !important;
-  border-right:1px solid var(--line);
-}
-
-/* App destra: prende lo spazio rimanente */
-#area.split > .view.sp-right {
-  flex:1 !important;
-  width:auto !important;
-  min-width:0 !important;
-  opacity:1 !important;
-  pointer-events:all !important;
-  padding:16px !important;
-  overflow:hidden;
-}
-
-/* Scala elementi mappa in split */
-#area.split #nav-arr  { width:38px; height:38px; font-size:18px; }
-#area.split #nav-ins  { font-size:14px !important; }
-#area.split #nav-dist { font-size:20px !important; }
-#area.split #map-search,
-#area.split #nav-card { top:10px; left:10px; right:10px; }
-#area.split #gps-bot,
-#area.split #nav-bot  { bottom:10px; left:10px; right:10px; }
-#area.split #obd-overlay { top:60px; right:10px; }
+/* ── SPLIT SCREEN ── gestito via inline styles in JS (_applySplit) ── */
+/* Nessuna regola CSS — evita conflitti con le view absolute-positioned */
 
 /* ── BAR BUTTONS ── */
 .bar-btn {
@@ -788,24 +776,7 @@ input[type=range]::-webkit-slider-thumb{
   .db.on .db-ico { opacity:1; }
   .dl         { font-size:8px; letter-spacing:.12em; }
 
-  /* ── SPLIT VERTICALE (mappe sopra, app sotto) ── */
-  #area.split               { flex-direction: column !important; }
-  #area.split > #v-maps     {
-    width:100% !important; min-width:unset !important; max-width:unset !important;
-    height:46% !important;
-    border-right: none !important;
-    border-bottom: 1px solid var(--line);
-  }
-  #area.split > .view.sp-right {
-    width:100% !important;
-    flex:1 !important;
-    height:auto !important;
-    padding:14px !important;
-  }
-  /* Elementi mappa in portrait-split più compatti */
-  #area.split #nav-arr   { width:34px; height:34px; font-size:16px; }
-  #area.split #nav-ins   { font-size:13px !important; }
-  #area.split #nav-dist  { font-size:18px !important; }
+  /* Split portrait gestito da _applySplit() in JS — nessuna regola CSS */
 
   /* ── MAPPA: overlay adattati ── */
   #map-search, #nav-card  { top:10px; left:10px; right:10px; }
@@ -1298,10 +1269,9 @@ function sw(id, btn) {
   btn.classList.add('on');
 
   if (splitMode) {
-    if (id === 'maps') { toggleSplit(); return; } // click maps → esci split
-    // cambia pannello destro
-    document.querySelectorAll('.view.sp-right').forEach(v => v.classList.remove('sp-right'));
-    document.getElementById('v-' + id).classList.add('sp-right');
+    if (id === 'maps') { toggleSplit(); return; }
+    _lastApp = id;
+    _applySplit(); // ridisegna split con nuova app destra
   } else {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('on','sp-right'));
     document.getElementById('v-' + id).classList.add('on');
@@ -1313,44 +1283,80 @@ function sw(id, btn) {
 // ── SPLIT SCREEN ──────────────────────────────────────────────
 function toggleSplit() {
   splitMode = !splitMode;
-  const area = document.getElementById('area');
   const btn  = document.getElementById('split-btn');
+  btn.classList.toggle('on', splitMode);
 
   if (splitMode) {
-    // Pulisci stato normale
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('on','sp-right'));
-    document.querySelectorAll('.db').forEach(b => b.classList.remove('on'));
-
-    // Attiva split
-    area.classList.add('split');
-    btn.classList.add('on');
-
-    // Inizializza mappa se serve
     if (!mapInit) initMap();
-
-    // Pannello destro default: musica (o ultima app attiva)
-    const rightId = _lastApp || 'music';
-    document.getElementById('v-' + rightId).classList.add('sp-right');
-    document.querySelector(`[data-v="${rightId}"]`)?.classList.add('on');
-
-    // Mapbox resize dopo il reflow CSS
-    setTimeout(() => map?.resize(), 120);
-
+    _applySplit();
   } else {
-    area.classList.remove('split');
-    btn.classList.remove('on');
-
-    // Pulisci classi split
-    document.querySelectorAll('.view.sp-right').forEach(v => v.classList.remove('sp-right'));
-
-    // Torna a maps singola
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+    _clearSplit();
+    // torna a maps
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('on','sp-right'));
     document.querySelectorAll('.db').forEach(b => b.classList.remove('on'));
     document.getElementById('v-maps').classList.add('on');
     document.querySelector('[data-v="maps"]')?.classList.add('on');
-
-    setTimeout(() => map?.resize(), 120);
+    setTimeout(() => map?.resize(), 100);
   }
+}
+
+function _applySplit() {
+  const area     = document.getElementById('area');
+  const portrait = window.innerHeight > window.innerWidth;
+  const rightId  = _lastApp || 'music';
+
+  // Area: flex container
+  area.style.display       = 'flex';
+  area.style.flexDirection = portrait ? 'column' : 'row';
+
+  // Porta tutte le view fuori dal flusso assoluto
+  document.querySelectorAll('.view').forEach(v => {
+    v.style.position = 'relative';
+    v.style.inset    = 'auto';
+    v.style.opacity  = '1';
+    v.style.transform = 'none';
+    v.style.pointerEvents = 'none';
+    v.style.display  = 'none';
+    v.classList.remove('on','sp-right');
+  });
+
+  // Pannello sinistro / sopra: MAPPA
+  const maps = document.getElementById('v-maps');
+  maps.style.display       = 'flex';
+  maps.style.pointerEvents = 'all';
+  maps.style.flexShrink    = '0';
+  maps.style.borderRight   = portrait ? 'none' : '1px solid var(--line)';
+  maps.style.borderBottom  = portrait ? '1px solid var(--line)' : 'none';
+  if (portrait) {
+    maps.style.width  = '100%';
+    maps.style.height = '46%';
+  } else {
+    maps.style.width  = '42%';
+    maps.style.height = '100%';
+  }
+
+  // Pannello destro / sotto: ALTRA APP
+  const right = document.getElementById('v-' + rightId);
+  right.style.display       = 'flex';
+  right.style.pointerEvents = 'all';
+  right.style.flex          = '1';
+  right.style.width         = portrait ? '100%' : 'auto';
+  right.style.height        = portrait ? 'auto' : '100%';
+  right.style.padding       = '14px';
+  right.style.overflow      = 'hidden';
+  right.classList.add('sp-right');
+  document.querySelector(`[data-v="${rightId}"]`)?.classList.add('on');
+
+  setTimeout(() => map?.resize(), 100);
+}
+
+function _clearSplit() {
+  const area = document.getElementById('area');
+  area.style.display = area.style.flexDirection = '';
+  document.querySelectorAll('.view').forEach(v => {
+    v.style.cssText = ''; // reset tutti gli inline styles
+    v.classList.remove('sp-right');
+  });
 }
 
 // Traccia ultima app visitata (per default pannello destro in split)
@@ -1363,15 +1369,28 @@ function toggleTheme() {
   btn.textContent = light ? '🌙' : '☀';
   btn.classList.toggle('on', light);
   localStorage.setItem('mg_light', light ? '1' : '0');
+
+  // Reset inline styles impostati da applyTheme() per evitare conflitti
+  const root = document.documentElement.style;
+  ['--bg','--s1','--bg1','--bg2','--bg3'].forEach(v => root.removeProperty(v));
+  document.getElementById('bar').style.removeProperty('background');
+  document.getElementById('dock').style.removeProperty('background');
+
+  // Deseleziona swatch background
+  document.querySelectorAll('.bg-sw').forEach(s => s.classList.remove('on'));
+  localStorage.removeItem('mg_theme');
+
   if (map) {
-    map.setStyle(light
+    const style = light
       ? 'mapbox://styles/mapbox/navigation-day-v1'
-      : 'mapbox://styles/mapbox/navigation-night-v1');
-    // ridisegna route dopo cambio stile
-    if (navSteps.length) map.once('style.load', () => {
-      const src = map.getSource('route');
-      if (src) { /* route già caricata, ridisegna layer */ }
-    });
+      : 'mapbox://styles/mapbox/navigation-night-v1';
+    map.setStyle(style);
+    // Ridisegna route dopo cambio stile (i layer vengono persi)
+    if (navSteps.length && window._destCoords) {
+      map.once('style.load', () => {
+        startNav(userPos, window._destCoords, window._destName || '');
+      });
+    }
   }
 }
 
@@ -2353,11 +2372,11 @@ function applyTheme(t) {
     localStorage.setItem('mg_light','1');
     if (map) map.setStyle('mapbox://styles/mapbox/navigation-day-v1');
   } else {
-    // rimuovi light se era attiva
     document.documentElement.classList.remove('light');
     document.getElementById('theme-btn').textContent = '☀';
     document.getElementById('theme-btn').classList.remove('on');
     localStorage.setItem('mg_light','0');
+    localStorage.removeItem('mg_theme'); // evita conflitto
     // applica bg personalizzato
     r.setProperty('--bg',  t.bg);
     r.setProperty('--s1',  t.s1);
