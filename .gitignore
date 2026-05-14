@@ -39,3 +39,4 @@ nssm.xml
 
 # Log
 logs/
+.claude/worktrees/
