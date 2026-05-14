@@ -511,6 +511,40 @@ input[type=range]::-webkit-slider-thumb{
 /* nasconde GPS stats di default — visibili solo fuori navigazione */
 #gps-bot{position:absolute;bottom:14px;left:14px;right:14px;z-index:20}
 
+/* ── ROUTE PREVIEW ── */
+#route-preview{
+  position:absolute;bottom:14px;left:14px;right:14px;z-index:25;
+  display:none;flex-direction:column;gap:0;
+  background:rgba(8,8,8,.94);backdrop-filter:blur(24px);
+  border:1px solid var(--line);border-radius:14px;overflow:hidden
+}
+.rp-head{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.rp-dest{font-family:var(--fs);font-weight:700;font-size:16px;color:var(--text);line-height:1.2;margin-bottom:2px}
+.rp-sub{font-family:var(--fd);font-size:9px;letter-spacing:.15em;color:var(--text2)}
+.rp-stats{display:flex;padding:10px 16px;gap:0;border-bottom:1px solid var(--line)}
+.rp-stat{flex:1;text-align:center}
+.rp-stat small{font-family:var(--fd);font-weight:700;font-size:8px;letter-spacing:.18em;color:var(--text2);display:block;margin-bottom:3px}
+.rp-stat strong{font-family:var(--fm);font-size:18px;font-weight:300;color:var(--text);line-height:1}
+.rp-weather{padding:8px 16px;display:none;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.rp-weather-ico{font-size:22px;flex-shrink:0}
+.rp-weather-info{font-family:var(--fd);font-size:11px;color:var(--text2);line-height:1.5}
+.rp-weather-info strong{color:var(--text);font-size:13px}
+.rp-wiki{padding:8px 16px 10px;display:none;font-family:var(--fd);font-size:10px;color:var(--text2);line-height:1.6;letter-spacing:.03em;border-bottom:1px solid var(--line)}
+.rp-btns{display:flex;gap:10px;padding:10px 12px}
+.rp-btn-cancel{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;color:var(--text2);
+  padding:10px;font-family:var(--fd);font-weight:700;font-size:11px;letter-spacing:.15em;cursor:pointer}
+.rp-btn-start{flex:2;background:var(--accent);border:none;border-radius:8px;color:#fff;
+  padding:10px;font-family:var(--fd);font-weight:700;font-size:12px;letter-spacing:.18em;cursor:pointer}
+
+/* ── GAS STATION BUTTON + MARKERS ── */
+#gas-btn{
+  position:absolute;top:62px;right:14px;z-index:20;width:36px;height:36px;
+  background:rgba(10,10,10,.82);backdrop-filter:blur(12px);
+  border:1px solid var(--line);border-radius:8px;
+  font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center
+}
+#gas-btn.active{background:rgba(68,212,120,.12);border-color:rgba(68,212,120,.35)}
+
 /* ── TEMA CHIARO (sole) ── */
 :root.light {
   --bg:    #f0ede8;
@@ -944,6 +978,33 @@ input[type=range]::-webkit-slider-thumb{
 
       <!-- Toggle voce navigazione -->
       <button id="voice-btn" class="on" onclick="toggleVoice()" title="Voce navigazione">🔊</button>
+
+      <!-- Benzinai vicini -->
+      <button id="gas-btn" onclick="toggleGasStations()" title="Benzinai vicini">⛽</button>
+
+      <!-- Route preview (prima di avviare navigazione) -->
+      <div id="route-preview">
+        <div class="rp-head">
+          <div class="rp-dest" id="rp-name">—</div>
+          <div class="rp-sub" id="rp-sub">Caricamento percorso...</div>
+        </div>
+        <div class="rp-stats">
+          <div class="rp-stat"><small>DISTANZA</small><strong id="rp-dist">—</strong></div>
+          <div class="nb-sep"></div>
+          <div class="rp-stat"><small>TEMPO</small><strong id="rp-time">—</strong></div>
+          <div class="nb-sep"></div>
+          <div class="rp-stat"><small>ARRIVO</small><strong id="rp-eta">—</strong></div>
+        </div>
+        <div class="rp-weather" id="rp-weather">
+          <div class="rp-weather-ico" id="rp-w-ico">🌡</div>
+          <div class="rp-weather-info" id="rp-w-info">—</div>
+        </div>
+        <div class="rp-wiki" id="rp-wiki"></div>
+        <div class="rp-btns">
+          <button class="rp-btn-cancel" onclick="cancelPreview()">ANNULLA</button>
+          <button class="rp-btn-start"  onclick="confirmNav()">▶ AVVIA</button>
+        </div>
+      </div>
 
       <!-- Mappa full-bleed -->
       <div id="mapbox-container">
@@ -2222,15 +2283,27 @@ async function geocode(query) {
   } catch(e) { hideResults(); }
 }
 
+const PLACE_TYPE_LABEL = { place:'Città', address:'Indirizzo', poi:'Luogo', region:'Regione', country:'Paese', postcode:'CAP', locality:'Località', neighborhood:'Quartiere' };
 function showResults(features) {
   const box = document.getElementById('dest-results');
   if (!features.length) { hideResults(); return; }
   box.style.display = 'block';
-  box.innerHTML = features.map((f,i) => `
-    <div class="dr" onclick="selectDest(${i})">
+  box.innerHTML = features.map((f,i) => {
+    const typeKey = f.place_type?.[0] || '';
+    const typeLabel = PLACE_TYPE_LABEL[typeKey] || '';
+    let distStr = '';
+    if (userPos) {
+      const dm = haversine(userPos, f.center);
+      distStr = dm >= 1000 ? `${(dm/1000).toFixed(0)} km` : `${Math.round(dm)} m`;
+    }
+    const sub = f.place_name.replace(f.text+', ','').slice(0, 50);
+    const meta = [typeLabel, distStr].filter(Boolean).join(' · ');
+    return `<div class="dr" onclick="selectDest(${i})">
       <div class="dr-name">${f.text}</div>
-      <div class="dr-sub">${f.place_name.replace(f.text+', ','')}</div>
-    </div>`).join('');
+      <div class="dr-sub">${sub}</div>
+      ${meta ? `<div style="font-size:8px;letter-spacing:.1em;color:var(--text2);opacity:.6;margin-top:2px">${meta}</div>` : ''}
+    </div>`;
+  }).join('');
   box._features = features;
 }
 
@@ -2248,19 +2321,18 @@ async function selectDest(idx) {
   hideResults();
 
   if (!userPos) {
-    // Prova a ottenere GPS prima di procedere
     showSearchLoading('Acquisisco GPS...');
     navigator.geolocation?.getCurrentPosition(pos => {
       userPos = [pos.coords.longitude, pos.coords.latitude];
       hideSearchLoading();
-      startNav(userPos, dest, name);
+      startNav(userPos, dest, name, true);
     }, () => {
       hideSearchLoading();
       alert('GPS non disponibile.\nControlla i permessi del browser.');
     }, { enableHighAccuracy:true, timeout:8000 });
     return;
   }
-  await startNav(userPos, dest, name);
+  await startNav(userPos, dest, name, true);
 }
 
 function showSearchLoading(msg) {
@@ -2280,9 +2352,8 @@ document.addEventListener('click', e => {
   }
 });
 
-async function startNav(origin, dest, destName) {
+async function startNav(origin, dest, destName, preview = false) {
   if (!CFG.MAPBOX_TOKEN || !map) return;
-  // Memorizza destinazione per rerouting
   window._destCoords = dest;
   window._destName   = destName;
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin[0]},${origin[1]};${dest[0]},${dest[1]}?`+
@@ -2327,26 +2398,38 @@ async function startNav(origin, dest, destName) {
     const bounds = coords.reduce((b,c) => b.extend(c), new mapboxgl.LngLatBounds(coords[0],coords[0]));
     map.fitBounds(bounds, { padding:{ top:100, bottom:100, left:40, right:40 }, duration:800 });
 
-    // Annuncio vocale partenza
     const totalKm  = (route.distance / 1000).toFixed(1);
     const totalMin = Math.round(route.duration / 60);
+    const eta      = new Date(Date.now() + route.duration * 1000);
+    const etaStr   = String(eta.getHours()).padStart(2,'0')+':'+String(eta.getMinutes()).padStart(2,'0');
+
+    if (preview) {
+      // Mostra preview card, non avviare navigazione
+      window._previewRoute = { route, origin, dest, destName };
+      document.getElementById('rp-name').textContent = destName.split(',')[0];
+      document.getElementById('rp-sub').textContent  = destName;
+      document.getElementById('rp-dist').textContent = totalKm + ' km';
+      document.getElementById('rp-time').textContent = totalMin + ' min';
+      document.getElementById('rp-eta').textContent  = etaStr;
+      document.getElementById('map-search').style.display    = 'none';
+      document.getElementById('route-preview').style.display = 'flex';
+      document.getElementById('gps-bot').style.display       = 'none';
+      // Fetch meteo + wiki in parallelo (non bloccante)
+      fetchDestWeather(dest[1], dest[0]);
+      fetchWikiSummary(destName.split(',')[0].trim());
+      return;
+    }
+
+    // Navigazione diretta (rerouting automatico)
     speak(`Navigazione avviata. ${totalKm} chilometri, circa ${totalMin} minuti verso ${destName}`);
-
-    // ETA
-    const mins  = totalMin;
-    const km    = totalKm;
-    const eta   = new Date(Date.now() + route.duration * 1000);
-    const etaStr= String(eta.getHours()).padStart(2,'0')+':'+String(eta.getMinutes()).padStart(2,'0');
     document.getElementById('nav-eta').textContent = etaStr;
-    document.getElementById('nav-km').textContent  = km+' km';
-    document.getElementById('nav-min').textContent = mins+' min';
-
-    // attiva UI navigazione
-    document.getElementById('map-search').style.display = 'none';
-    document.getElementById('nav-card').style.display   = 'flex';
-    document.getElementById('gps-bot').style.display    = 'none';
-    document.getElementById('nav-bot').style.display    = 'flex';
-
+    document.getElementById('nav-km').textContent  = totalKm + ' km';
+    document.getElementById('nav-min').textContent = totalMin + ' min';
+    document.getElementById('map-search').style.display    = 'none';
+    document.getElementById('nav-card').style.display      = 'flex';
+    document.getElementById('gps-bot').style.display       = 'none';
+    document.getElementById('nav-bot').style.display       = 'flex';
+    document.getElementById('route-preview').style.display = 'none';
     updateStep(0);
   } catch(e) { alert('Errore routing: '+e.message); }
 }
@@ -2472,6 +2555,122 @@ function clearDest() {
   document.getElementById('dest-clear').style.display = 'none';
   hideResults();
   if (navSteps.length) stopNav();
+  cancelPreview();
+}
+
+// ── ROUTE PREVIEW ─────────────────────────────────────────────
+function confirmNav() {
+  const pr = window._previewRoute;
+  if (!pr) return;
+  window._previewRoute = null;
+  const { route, dest, destName } = pr;
+  navSteps = route.legs[0].steps;
+  navIdx   = 0;
+  const km  = (route.distance / 1000).toFixed(1);
+  const min = Math.round(route.duration / 60);
+  const eta = new Date(Date.now() + route.duration * 1000);
+  document.getElementById('nav-eta').textContent = String(eta.getHours()).padStart(2,'0')+':'+String(eta.getMinutes()).padStart(2,'0');
+  document.getElementById('nav-km').textContent  = km + ' km';
+  document.getElementById('nav-min').textContent = min + ' min';
+  document.getElementById('route-preview').style.display = 'none';
+  document.getElementById('nav-card').style.display      = 'flex';
+  document.getElementById('nav-bot').style.display       = 'flex';
+  speak(`Navigazione avviata. ${km} chilometri, circa ${min} minuti verso ${destName}`);
+  updateStep(0);
+}
+
+function cancelPreview() {
+  window._previewRoute = null;
+  document.getElementById('route-preview').style.display = 'none';
+  document.getElementById('rp-weather').style.display    = 'none';
+  document.getElementById('rp-wiki').style.display       = 'none';
+  if (!navSteps.length) {
+    document.getElementById('map-search').style.display = 'flex';
+    document.getElementById('gps-bot').style.display    = 'flex';
+    if (map) {
+      ['route-line','route-case'].forEach(id => { try { map.removeLayer(id); } catch(_) {} });
+      try { map.removeSource('route'); } catch(_) {}
+      window._destMarker?.remove(); window._destMarker = null;
+    }
+  }
+}
+
+// ── METEO A DESTINAZIONE ──────────────────────────────────────
+async function fetchDestWeather(lat, lng) {
+  if (!CFG.OPENWEATHER_KEY) return;
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${CFG.OPENWEATHER_KEY}&units=metric&lang=it`;
+    const d = await (await fetch(url)).json();
+    if (!d.main) return;
+    const temp    = Math.round(d.main.temp);
+    const desc    = d.weather[0]?.description || '';
+    const wind    = Math.round(d.wind?.speed * 3.6 || 0);
+    const icon    = d.weather[0]?.icon || '';
+    const emoMap  = { '01':'☀️','02':'⛅','03':'☁️','04':'☁️','09':'🌧','10':'🌦','11':'⛈','13':'❄️','50':'🌫' };
+    const emo     = emoMap[icon.slice(0,2)] || '🌡';
+    const city    = d.name || '';
+    document.getElementById('rp-w-ico').textContent  = emo;
+    document.getElementById('rp-w-info').innerHTML   = `<strong>${temp}°C</strong> — ${desc}<br><span style="font-size:9px">${city} · Vento ${wind} km/h · Umidità ${d.main.humidity}%</span>`;
+    document.getElementById('rp-weather').style.display = 'flex';
+  } catch(_) {}
+}
+
+// ── INFO WIKIPEDIA ────────────────────────────────────────────
+async function fetchWikiSummary(name) {
+  try {
+    const url = `https://it.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`;
+    const d = await (await fetch(url)).json();
+    if (!d.extract) return;
+    const text = d.extract.slice(0, 180).trim();
+    if (text.length < 30) return;
+    document.getElementById('rp-wiki').textContent  = text + (d.extract.length > 180 ? '…' : '');
+    document.getElementById('rp-wiki').style.display = 'block';
+  } catch(_) {}
+}
+
+// ── BENZINAI VICINI ───────────────────────────────────────────
+let _gasMarkers = [], _gasActive = false;
+
+async function toggleGasStations() {
+  const btn = document.getElementById('gas-btn');
+  if (_gasActive) {
+    clearGasMarkers();
+    btn.classList.remove('active');
+    _gasActive = false;
+    return;
+  }
+  if (!map) { alert('Mappa non ancora caricata'); return; }
+  const pos = userPos || (map ? [map.getCenter().lng, map.getCenter().lat] : null);
+  if (!pos) { alert('GPS non disponibile'); return; }
+  btn.textContent = '⏳';
+  try {
+    const query = `[out:json][timeout:12];node["amenity"="fuel"](around:5000,${pos[1]},${pos[0]});out body;`;
+    const r = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query });
+    const d = await r.json();
+    const nodes = d.elements || [];
+    clearGasMarkers();
+    nodes.slice(0, 20).forEach(n => {
+      const el = Object.assign(document.createElement('div'), {
+        title: n.tags?.name || 'Stazione',
+        style: 'width:22px;height:22px;border-radius:50%;background:#1E6B3E;border:2px solid #44D478;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;box-shadow:0 0 0 4px rgba(68,212,120,.15)'
+      });
+      el.textContent = '⛽';
+      const dist = Math.round(haversine(pos, [n.lon, n.lat]));
+      const popup = new mapboxgl.Popup({ offset:12, closeButton:false })
+        .setHTML(`<div style="font-family:sans-serif;font-size:11px;color:#fff;background:#111;padding:6px 8px;border-radius:6px"><b>${n.tags?.name||'Stazione carburante'}</b><br>${dist < 1000 ? dist+'m' : (dist/1000).toFixed(1)+'km'} · ${n.tags?.brand||''}</div>`);
+      const marker = new mapboxgl.Marker({ element:el }).setLngLat([n.lon, n.lat]).setPopup(popup).addTo(map);
+      _gasMarkers.push(marker);
+    });
+    _gasActive = true;
+    btn.textContent = '⛽';
+    btn.classList.add('active');
+    if (!nodes.length) alert('Nessun distributore trovato entro 5 km');
+  } catch(e) { btn.textContent = '⛽'; alert('Errore ricerca benzinai: ' + e.message); }
+}
+
+function clearGasMarkers() {
+  _gasMarkers.forEach(m => m.remove());
+  _gasMarkers = [];
 }
 
 // ── BACKGROUND THEMES ─────────────────────────────────────────
