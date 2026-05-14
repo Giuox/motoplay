@@ -6,6 +6,7 @@ window.MOTOPLAY = {
   SPOTIFY_CLIENT_ID: '',   // https://developer.spotify.com/dashboard
   OPENWEATHER_KEY:   '',   // https://openweathermap.org/api (gratuito)
   SOS_CONTACT:       '',   // es. '+39333123456'
+  ANTHROPIC_API_KEY: '',   // https://console.anthropic.com — per AI Explorer (opzionale, usa Overpass se assente)
   REDIRECT_URI:      'https://TUO-DOMINIO/callback.html', // Web
   // Android APK usa automaticamente: com.motoplay.app://callback
   SPOTIFY_SCOPES: [

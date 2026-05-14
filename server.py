@@ -8,7 +8,7 @@ Avvio locale:  python server.py
 Avvio cloud:   PORT=8000 python server.py
 """
 
-import asyncio, json, math, random, time, os, sys, logging, socket
+import asyncio, json, math, random, time, os, sys, logging, socket, urllib.request, urllib.parse
 from pathlib import Path
 
 logging.basicConfig(
@@ -229,6 +229,155 @@ async def static_handler(request):
     return web.FileResponse(ROOT / 'index.html')  # SPA fallback
 
 
+# ─── AI Route Explorer ───────────────────────────────────────
+ANTHROPIC_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+
+TIME_RANGES = {
+    'mattinata':  {'hours': 3,  'radius_km': 80,  'waypoints': 3, 'label': 'mattinata (3h)'},
+    'giornata':   {'hours': 7,  'radius_km': 180, 'waypoints': 5, 'label': 'giornata intera (7h)'},
+    'piu_giorni': {'hours': 20, 'radius_km': 400, 'waypoints': 7, 'label': 'più giorni'},
+}
+
+async def ai_route_handler(request):
+    try:
+        data = await request.json()
+    except Exception:
+        return web.Response(status=400, text='bad json')
+
+    lat  = float(data.get('lat', 45.46))
+    lng  = float(data.get('lng', 9.19))
+    rng  = data.get('range', 'giornata')
+    cfg  = TIME_RANGES.get(rng, TIME_RANGES['giornata'])
+
+    if ANTHROPIC_KEY:
+        result = await _ai_route_claude(lat, lng, cfg)
+    else:
+        result = await _ai_route_overpass(lat, lng, cfg)
+
+    return web.json_response(result)
+
+
+async def _ai_route_claude(lat, lng, cfg):
+    try:
+        import anthropic
+    except ImportError:
+        log.warning("anthropic non installato — fallback Overpass")
+        return await _ai_route_overpass(lat, lng, cfg)
+
+    prompt = f"""Sei un esperto di percorsi moto in Italia e Europa.
+Il motociclista si trova alle coordinate ({lat:.4f}, {lng:.4f}) e ha a disposizione una {cfg['label']}.
+Raggio massimo: {cfg['radius_km']} km dal punto di partenza.
+
+Suggerisci un percorso moto panoramico con esattamente {cfg['waypoints']} tappe.
+Criteri: strade tortuose, passi, laghi, borghi storici, panorami. Evita autostrade.
+Per percorsi di più giorni includi borghi con strutture ricettive come tappa notturna.
+
+Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
+{{
+  "title": "Nome breve del percorso",
+  "description": "Descrizione evocativa in 2 frasi",
+  "highlights": ["highlight1", "highlight2", "highlight3"],
+  "waypoints": [
+    {{"lat": 0.0, "lng": 0.0, "name": "Nome luogo", "note": "Perché è interessante"}}
+  ]
+}}"""
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001',
+            max_tokens=800,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        text = msg.content[0].text.strip()
+        # Estrai JSON anche se Claude aggiunge testo prima/dopo
+        start = text.find('{'); end = text.rfind('}') + 1
+        result = json.loads(text[start:end])
+        result['source'] = 'ai'
+        log.info(f"AI route: {result.get('title','?')} ({len(result.get('waypoints',[]))} tappe)")
+        return result
+    except Exception as e:
+        log.warning(f"Claude API error: {e} — fallback Overpass")
+        return await _ai_route_overpass(lat, lng, cfg)
+
+
+async def _ai_route_overpass(lat, lng, cfg):
+    """Fallback: seleziona POI interessanti via Overpass OSM."""
+    radius = cfg['radius_km'] * 1000
+    query = f"""[out:json][timeout:20];
+(
+  node["natural"="peak"]["ele"](around:{radius},{lat},{lng});
+  node["mountain_pass"="yes"](around:{radius},{lat},{lng});
+  node["tourism"="viewpoint"]["name"](around:{radius},{lat},{lng});
+  node["natural"="lake"]["name"](around:{radius},{lat},{lng});
+  node["historic"="castle"]["name"](around:{radius},{lat},{lng});
+  node["place"="town"]["name"](around:{radius},{lat},{lng});
+);
+out body {cfg['waypoints'] * 6};"""
+
+    try:
+        loop = asyncio.get_event_loop()
+        def fetch():
+            req = urllib.request.Request(
+                'https://overpass-api.de/api/interpreter',
+                data=query.encode(), method='POST',
+                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+            )
+            with urllib.request.urlopen(req, timeout=25) as r:
+                return json.loads(r.read())
+
+        data = await loop.run_in_executor(None, fetch)
+        elements = data.get('elements', [])
+
+        # Seleziona punti diversificati, distribuiti geograficamente
+        selected = _pick_diverse_pois(elements, cfg['waypoints'], lat, lng, cfg['radius_km'])
+
+        return {
+            'title': 'Esplorazione dalla tua posizione',
+            'description': f"Percorso generato dai dati OpenStreetMap in un raggio di {cfg['radius_km']} km.",
+            'highlights': ['Strade panoramiche', 'Punti di interesse', 'Percorso evita autostrade'],
+            'waypoints': selected,
+            'source': 'overpass',
+        }
+    except Exception as e:
+        log.error(f"Overpass error: {e}")
+        return {'error': str(e), 'waypoints': []}
+
+
+def _pick_diverse_pois(elements, n, orig_lat, orig_lng, max_km):
+    """Seleziona n POI cercando diversità geografica."""
+    if not elements: return []
+    # Priorità: passi > vette > castelli > viewpoint > laghi > borghi
+    PRIO = {'mountain_pass': 5, 'peak': 4, 'castle': 3, 'viewpoint': 3, 'lake': 2, 'town': 1}
+    scored = []
+    for e in elements:
+        t = e.get('tags', {})
+        name = t.get('name', '')
+        if not name: continue
+        ptype = 'peak' if t.get('natural')=='peak' else \
+                'mountain_pass' if t.get('mountain_pass') else \
+                'castle' if t.get('historic')=='castle' else \
+                'viewpoint' if t.get('tourism')=='viewpoint' else \
+                'lake' if t.get('natural')=='lake' else 'town'
+        scored.append({'lat': e['lat'], 'lng': e['lon'], 'name': name,
+                        'note': t.get('ele', ''), 'ptype': ptype,
+                        'score': PRIO.get(ptype, 0)})
+
+    scored.sort(key=lambda x: -x['score'])
+    # Filtra per distanza minima tra waypoints (evita cluster)
+    selected, min_sep = [], max_km * 1000 / (n * 1.5)
+    for poi in scored:
+        if len(selected) >= n: break
+        too_close = any(
+            math.sqrt((poi['lat']-s['lat'])**2 + (poi['lng']-s['lng'])**2) * 111000 < min_sep
+            for s in selected
+        )
+        if not too_close:
+            selected.append({'lat': poi['lat'], 'lng': poi['lng'],
+                              'name': poi['name'], 'note': poi.get('note','')})
+    return selected
+
+
 # ─── iPhone Shortcuts endpoint ───────────────────────────────
 async def iphone_handler(request):
     try:
@@ -245,6 +394,7 @@ async def iphone_handler(request):
 app = web.Application()
 app.router.add_get('/ws',              ws_handler)
 app.router.add_post('/api/iphone',     iphone_handler)
+app.router.add_post('/api/ai-route',   ai_route_handler)
 app.router.add_get('/',                index_handler)
 app.router.add_get('/{path:.+}',       static_handler)
 

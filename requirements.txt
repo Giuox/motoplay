@@ -1,4 +1,5 @@
 aiohttp>=3.9
+anthropic>=0.40
 # Solo Raspberry Pi:
 # pyserial>=3.5
 # gpsd-py3>=0.3
