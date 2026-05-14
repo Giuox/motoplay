@@ -346,37 +346,34 @@ out body {cfg['waypoints'] * 6};"""
 
 
 def _pick_diverse_pois(elements, n, orig_lat, orig_lng, max_km):
-    """Seleziona n POI cercando diversità geografica."""
-    if not elements: return []
-    # Priorità: passi > vette > castelli > viewpoint > laghi > borghi
-    PRIO = {'mountain_pass': 5, 'peak': 4, 'castle': 3, 'viewpoint': 3, 'lake': 2, 'town': 1}
+    PRIO = {'mountain_pass':6,'peak':5,'waterfall':4,'castle':4,'viewpoint':3,
+            'attraction':3,'lake':3,'town':2,'monument':2,'village':1}
     scored = []
     for e in elements:
         t = e.get('tags', {})
         name = t.get('name', '')
         if not name: continue
-        ptype = 'peak' if t.get('natural')=='peak' else \
-                'mountain_pass' if t.get('mountain_pass') else \
-                'castle' if t.get('historic')=='castle' else \
-                'viewpoint' if t.get('tourism')=='viewpoint' else \
-                'lake' if t.get('natural')=='lake' else 'town'
+        ptype = ('mountain_pass' if t.get('mountain_pass') else
+                 'peak'      if t.get('natural')=='peak' else
+                 'waterfall' if t.get('natural')=='waterfall' else
+                 'lake'      if t.get('natural')=='lake' else
+                 'castle'    if t.get('historic')=='castle' else
+                 'monument'  if t.get('historic')=='monument' else
+                 'viewpoint' if t.get('tourism')=='viewpoint' else
+                 'attraction'if t.get('tourism')=='attraction' else
+                 'town'      if t.get('place')=='town' else 'village')
         scored.append({'lat': e['lat'], 'lng': e['lon'], 'name': name,
-                        'note': t.get('ele', ''), 'ptype': ptype,
-                        'score': PRIO.get(ptype, 0)})
-
+                       'note': t.get('ele',''), 'score': PRIO.get(ptype, 1)})
     scored.sort(key=lambda x: -x['score'])
-    # Filtra per distanza minima tra waypoints (evita cluster)
-    selected, min_sep = [], max_km * 1000 / (n * 1.5)
-    for poi in scored:
-        if len(selected) >= n: break
-        too_close = any(
-            math.sqrt((poi['lat']-s['lat'])**2 + (poi['lng']-s['lng'])**2) * 111000 < min_sep
-            for s in selected
-        )
-        if not too_close:
-            selected.append({'lat': poi['lat'], 'lng': poi['lng'],
-                              'name': poi['name'], 'note': poi.get('note','')})
-    return selected
+    for sep in [max_km*400/n, max_km*200/n, max_km*100/n, 5000]:
+        selected = []
+        for poi in scored:
+            if len(selected) >= n: break
+            too_close = any(math.sqrt((poi['lat']-s['lat'])**2+(poi['lng']-s['lng'])**2)*111000 < sep for s in selected)
+            if not too_close:
+                selected.append({'lat':poi['lat'],'lng':poi['lng'],'name':poi['name'],'note':poi.get('note','')})
+        if len(selected) >= min(n, 2): return selected
+    return [{'lat':p['lat'],'lng':p['lng'],'name':p['name'],'note':p.get('note','')} for p in scored[:n]]
 
 
 # ─── iPhone Shortcuts endpoint ───────────────────────────────

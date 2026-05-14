@@ -638,6 +638,27 @@ input[type=range]::-webkit-slider-thumb{
 }
 #scenic-btn.active{background:rgba(200,16,46,.12);border-color:rgba(200,16,46,.35)}
 
+/* ── MAP STYLE SWITCHER ── */
+#style-btn{
+  position:absolute;top:188px;right:14px;z-index:20;width:36px;height:36px;
+  background:rgba(10,10,10,.82);backdrop-filter:blur(12px);
+  border:1px solid var(--line);border-radius:8px;
+  font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center
+}
+#style-panel{
+  position:absolute;top:188px;right:56px;z-index:21;display:none;
+  background:rgba(8,8,8,.95);backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:140px
+}
+.sp-opt{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;
+  font-family:var(--fd);font-size:11px;letter-spacing:.1em;color:rgba(255,255,255,.7);
+  border-bottom:1px solid var(--line);transition:background .12s
+}
+.sp-opt:last-child{border-bottom:none}
+.sp-opt:hover,.sp-opt.active{background:rgba(200,16,46,.12);color:#fff}
+.sp-opt span{font-size:16px;flex-shrink:0}
+
 /* ── TEMA CHIARO (sole) ── */
 :root.light {
   --bg:    #f0ede8;
@@ -1116,6 +1137,15 @@ input[type=range]::-webkit-slider-thumb{
       <button id="parking-btn" onclick="toggleParking()"     title="Parcheggi moto">🅿️</button>
       <!-- Percorso panoramico -->
       <button id="scenic-btn"  onclick="toggleScenic()"      title="Evita autostrade — percorso panoramico">🏍</button>
+
+      <!-- Map style switcher -->
+      <button id="style-btn" onclick="toggleStylePanel()" title="Stile mappa">🗺</button>
+      <div id="style-panel">
+        <div class="sp-opt active" data-style="nav"       onclick="setMapStyle('nav')">      <span>🧭</span>Navigazione</div>
+        <div class="sp-opt"        data-style="satellite" onclick="setMapStyle('satellite')"><span>🛰</span>Satellite</div>
+        <div class="sp-opt"        data-style="terrain"   onclick="setMapStyle('terrain')">  <span>🏔</span>Terreno</div>
+        <div class="sp-opt"        data-style="streets"   onclick="setMapStyle('streets')">  <span>🏙</span>Stradale</div>
+      </div>
 
       <!-- Speed camera badge (navigazione attiva) -->
       <div id="cam-badge">📷 AUTOVELOX <span id="cam-dist">—</span></div>
@@ -1729,10 +1759,11 @@ async function initMap() {
   mapboxgl.accessToken = CFG.MAPBOX_TOKEN;
 
   const isDark = !document.documentElement.classList.contains('light');
+  const _sk = localStorage.getItem('mg_mapstyle') || 'nav';
+  const _initStyle = (MAP_STYLES[_sk] || MAP_STYLES.nav)[isDark ? 'dark' : 'light'];
   map = new mapboxgl.Map({
     container: 'mapbox-container',
-    style: isDark ? 'mapbox://styles/mapbox/navigation-night-v1'
-                  : 'mapbox://styles/mapbox/navigation-day-v1',
+    style: _initStyle,
     center: [9.19, 45.46], zoom: 4,   // zoom fuori — poi centra su GPS reale
     attributionControl: false,
   });
@@ -2539,6 +2570,7 @@ async function startNav(origin, dest, destName, preview = false) {
 
     // disegna percorso
     const geom = route.geometry;
+    window._lastRouteGeom = geom;
     if (map.getSource('route')) {
       map.getSource('route').setData({ type:'Feature', geometry:geom });
     } else {
@@ -2879,35 +2911,62 @@ async function _exploreOverpassFallback(pos, range) {
   const RANGES = { mattinata:{r:80,n:3}, giornata:{r:180,n:5}, piu_giorni:{r:400,n:7} };
   const cfg = RANGES[range] || RANGES.giornata;
   const radius = cfg.r * 1000;
-  const query = `[out:json][timeout:20];(
+  const lim = Math.max(100, cfg.n * 25);
+  const query = `[out:json][timeout:25];(
     node["natural"="peak"]["ele"](around:${radius},${pos[1]},${pos[0]});
     node["mountain_pass"="yes"](around:${radius},${pos[1]},${pos[0]});
     node["tourism"="viewpoint"]["name"](around:${radius},${pos[1]},${pos[0]});
     node["natural"="lake"]["name"](around:${radius},${pos[1]},${pos[0]});
     node["historic"="castle"]["name"](around:${radius},${pos[1]},${pos[0]});
-  );out body ${cfg.n * 5};`;
+    node["place"="town"]["name"](around:${radius},${pos[1]},${pos[0]});
+    node["place"="village"]["name"]["population"](around:${radius},${pos[1]},${pos[0]});
+    node["tourism"="attraction"]["name"](around:${radius},${pos[1]},${pos[0]});
+    node["natural"="waterfall"]["name"](around:${radius},${pos[1]},${pos[0]});
+    node["historic"="monument"]["name"](around:${radius},${pos[1]},${pos[0]});
+  );out body ${lim};`;
   const d = await (await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query })).json();
   const elements = d.elements || [];
-  if (!elements.length) throw new Error('Nessun POI trovato nella zona');
-  const selected = _pickDiversePOIs(elements, cfg.n, pos, cfg.r);
-  return { title:'Esplorazione', description:'Percorso generato da OpenStreetMap', highlights:['Panoramico','Evita autostrade'], waypoints:selected, source:'overpass' };
+  if (!elements.length) throw new Error('Nessun POI trovato nella zona. Verifica GPS o allarga il raggio.');
+  const selected = _pickDiversePOIs(elements, cfg.n, cfg.r);
+  if (!selected.length) throw new Error('Zona troppo omogenea per generare un percorso vario.');
+  return {
+    title: 'Esplorazione dalla tua posizione',
+    description: `${selected.length} tappe selezionate in un raggio di ${cfg.r} km.`,
+    highlights: ['Evita autostrade', 'Strade locali', 'Punti di interesse'],
+    waypoints: selected, source: 'overpass'
+  };
 }
 
-function _pickDiversePOIs(elements, n, origin, maxKm) {
-  const PRIO = { peak:4, mountain_pass:5, castle:3, viewpoint:3, lake:2 };
+function _pickDiversePOIs(elements, n, maxKm) {
+  const PRIO = { mountain_pass:6, peak:5, waterfall:4, castle:4, viewpoint:3, attraction:3, lake:3, town:2, village:1, monument:2 };
   const scored = elements.map(e => {
     const t = e.tags || {};
     const name = t.name || ''; if (!name) return null;
-    const ptype = t.mountain_pass?'mountain_pass':t.natural==='peak'?'peak':t.historic==='castle'?'castle':t.tourism==='viewpoint'?'viewpoint':'lake';
-    return { lat:e.lat, lng:e.lon, name, note:t.ele||'', score:PRIO[ptype]||1 };
-  }).filter(Boolean).sort((a,b)=>b.score-a.score);
-  const selected = [], minSep = maxKm * 1000 / (n * 1.5);
-  for (const p of scored) {
-    if (selected.length >= n) break;
-    const tooClose = selected.some(s => Math.sqrt((p.lat-s.lat)**2+(p.lng-s.lng)**2)*111000 < minSep);
-    if (!tooClose) selected.push({ lat:p.lat, lng:p.lng, name:p.name, note:p.note });
+    const ptype =
+      t.mountain_pass ? 'mountain_pass' :
+      t.natural === 'peak' ? 'peak' :
+      t.natural === 'waterfall' ? 'waterfall' :
+      t.natural === 'lake' ? 'lake' :
+      t.historic === 'castle' ? 'castle' :
+      t.historic === 'monument' ? 'monument' :
+      t.tourism === 'viewpoint' ? 'viewpoint' :
+      t.tourism === 'attraction' ? 'attraction' :
+      t.place === 'town' ? 'town' : 'village';
+    return { lat:e.lat, lng:e.lon, name, note:t.ele||t.description||'', score:PRIO[ptype]||1 };
+  }).filter(Boolean).sort((a,b) => b.score - a.score);
+
+  // Tenta con separazione progressivamente più permissiva
+  for (const sep of [maxKm * 400 / n, maxKm * 200 / n, maxKm * 100 / n, 5000]) {
+    const selected = [];
+    for (const p of scored) {
+      if (selected.length >= n) break;
+      const tooClose = selected.some(s => Math.sqrt((p.lat-s.lat)**2+(p.lng-s.lng)**2)*111000 < sep);
+      if (!tooClose) selected.push({ lat:p.lat, lng:p.lng, name:p.name, note:p.note });
+    }
+    if (selected.length >= Math.min(n, 2)) return selected;
   }
-  return selected;
+  // Fallback finale: prendi i top-N senza vincoli distanza
+  return scored.slice(0, n).map(p => ({ lat:p.lat, lng:p.lng, name:p.name, note:p.note }));
 }
 
 // ── ROUTE PREVIEW ─────────────────────────────────────────────
@@ -3121,6 +3180,55 @@ async function fetchParkingForDest(dest) {
     document.getElementById('rp-parking').style.display = 'block';
   } catch(_) {}
 }
+
+// ── MAP STYLE SWITCHER ────────────────────────────────────────
+const MAP_STYLES = {
+  nav:       { dark:'mapbox://styles/mapbox/navigation-night-v1', light:'mapbox://styles/mapbox/navigation-day-v1' },
+  satellite: { dark:'mapbox://styles/mapbox/satellite-streets-v12', light:'mapbox://styles/mapbox/satellite-streets-v12' },
+  terrain:   { dark:'mapbox://styles/mapbox/outdoors-v12', light:'mapbox://styles/mapbox/outdoors-v12' },
+  streets:   { dark:'mapbox://styles/mapbox/dark-v11', light:'mapbox://styles/mapbox/streets-v12' },
+};
+let _currentStyleKey = localStorage.getItem('mg_mapstyle') || 'nav';
+
+function toggleStylePanel() {
+  const p = document.getElementById('style-panel');
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+}
+
+function setMapStyle(key) {
+  if (!map) return;
+  _currentStyleKey = key;
+  localStorage.setItem('mg_mapstyle', key);
+  document.querySelectorAll('.sp-opt').forEach(el => el.classList.toggle('active', el.dataset.style === key));
+  document.getElementById('style-panel').style.display = 'none';
+  const isLight = document.documentElement.classList.contains('light');
+  const styleUrl = MAP_STYLES[key][isLight ? 'light' : 'dark'];
+  map.setStyle(styleUrl);
+  map.once('style.load', _redrawRoute);
+}
+
+function _redrawRoute() {
+  if (!window._destCoords) return;
+  // Recupera geometria dal source esistente (prima del cambio stile era salvata)
+  const geom = window._lastRouteGeom;
+  if (!geom) return;
+  if (!map.getSource('route')) {
+    map.addSource('route', { type:'geojson', data:{ type:'Feature', geometry:geom } });
+    map.addLayer({ id:'route-case', type:'line', source:'route',
+      layout:{'line-join':'round','line-cap':'round'},
+      paint:{'line-color':'#700010','line-width':9,'line-opacity':.5} });
+    map.addLayer({ id:'route-line', type:'line', source:'route',
+      layout:{'line-join':'round','line-cap':'round'},
+      paint:{'line-color':'#C8102E','line-width':5,'line-opacity':.95} });
+  }
+}
+
+// Chiudi style panel cliccando fuori
+document.addEventListener('click', e => {
+  if (!e.target.closest('#style-btn') && !e.target.closest('#style-panel')) {
+    document.getElementById('style-panel').style.display = 'none';
+  }
+});
 
 // ── PERCORSO PANORAMICO ───────────────────────────────────────
 let _scenicMode = false;
