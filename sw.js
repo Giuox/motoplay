@@ -1,4 +1,4 @@
-const CACHE = 'motoplay-v2';
+const CACHE = 'motoplay-v3';
 const SHELL = [
   '/',
   '/index.html',
@@ -28,12 +28,18 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // WebSocket e API esterne: sempre network
+  // Non intercettare: WebSocket, POST, chrome-extension
   if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
+  if (e.request.method !== 'GET') return;
+
+  // Risorse esterne: network first, fallback cache, fallback 503
   if (url.hostname !== self.location.hostname) {
-    // Risorse esterne (Mapbox, Spotify, Google Fonts): network first
     e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
+      fetch(e.request).catch(() =>
+        caches.match(e.request).then(cached =>
+          cached || new Response('', { status: 503, statusText: 'Offline' })
+        )
+      )
     );
     return;
   }
