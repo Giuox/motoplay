@@ -248,16 +248,17 @@ async def ai_route_handler(request):
     lng  = float(data.get('lng', 9.19))
     rng  = data.get('range', 'giornata')
     cfg  = TIME_RANGES.get(rng, TIME_RANGES['giornata'])
+    key  = data.get('api_key') or ANTHROPIC_KEY  # client key ha priorità
 
-    if ANTHROPIC_KEY:
-        result = await _ai_route_claude(lat, lng, cfg)
+    if key:
+        result = await _ai_route_claude(lat, lng, cfg, key)
     else:
         result = await _ai_route_overpass(lat, lng, cfg)
 
     return web.json_response(result)
 
 
-async def _ai_route_claude(lat, lng, cfg):
+async def _ai_route_claude(lat, lng, cfg, key=None):
     try:
         import anthropic
     except ImportError:
@@ -283,7 +284,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
 }}"""
 
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        client = anthropic.Anthropic(api_key=key or ANTHROPIC_KEY)
         msg = client.messages.create(
             model='claude-haiku-4-5-20251001',
             max_tokens=800,

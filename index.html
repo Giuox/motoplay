@@ -599,6 +599,15 @@ input[type=range]::-webkit-slider-thumb{
 .rwx-pt span{font-size:18px;display:block;line-height:1.2}
 .rwx-pt b{font-family:var(--fm);font-size:11px;color:#fff}
 
+/* ── REST STOPS IN PREVIEW ── */
+.rp-rest{padding:8px 16px 6px;display:none;border-bottom:1px solid var(--line)}
+.rp-rest-title{font-family:var(--fd);font-size:8px;letter-spacing:.18em;color:rgba(255,255,255,.4);margin-bottom:6px}
+.rp-rest-item{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.rp-rest-item:last-child{border-bottom:none}
+.rp-rest-ico{font-size:16px;flex-shrink:0;width:24px;text-align:center}
+.rp-rest-name{font-family:var(--fd);font-size:12px;color:#fff;font-weight:700}
+.rp-rest-meta{font-family:var(--fd);font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.06em}
+
 /* ── PARKING SECTION IN PREVIEW ── */
 .rp-parking{padding:8px 16px 6px;display:none;border-bottom:1px solid var(--line)}
 .rp-parking-title{font-family:var(--fd);font-size:8px;letter-spacing:.18em;color:rgba(255,255,255,.4);margin-bottom:6px}
@@ -1137,6 +1146,10 @@ input[type=range]::-webkit-slider-thumb{
           <div class="rp-weather-info" id="rp-w-info">—</div>
         </div>
         <div class="rp-wiki" id="rp-wiki"></div>
+        <div class="rp-rest" id="rp-rest">
+          <div class="rp-rest-title">SOSTE CONSIGLIATE</div>
+          <div id="rp-rest-list"></div>
+        </div>
         <div class="rp-parking" id="rp-parking">
           <div class="rp-parking-title">PARCHEGGI MOTO VICINI</div>
           <div id="rp-park-list"></div>
@@ -2571,6 +2584,7 @@ async function startNav(origin, dest, destName, preview = false) {
       fetchWikiSummary(destName.split(',')[0].trim());
       fetchRouteWeather(route.geometry.coordinates);
       fetchParkingForDest(dest);
+      fetchRestStops(route.geometry.coordinates, route.duration);
       // Carica autovelox sul percorso
       if (map.getBounds) loadSpeedCameras(map.getBounds());
       return;
@@ -2754,7 +2768,7 @@ async function startExplore(range) {
       const r = await fetch(`http://${srvHost}/api/ai-route`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat: pos[1], lng: pos[0], range }),
+        body: JSON.stringify({ lat: pos[1], lng: pos[0], range, api_key: CFG.ANTHROPIC_API_KEY || '' }),
         signal: AbortSignal.timeout(30000),
       });
       routeData = await r.json();
@@ -2856,8 +2870,9 @@ async function _buildExploreRoute(origin, routeData) {
   document.getElementById('route-preview').style.display = 'flex';
   document.getElementById('gps-bot').style.display       = 'none';
 
-  // Fetch meteo lungo percorso
+  // Fetch meteo + soste ristoro
   fetchRouteWeather(route.geometry.coordinates);
+  fetchRestStops(route.geometry.coordinates, route.duration);
 }
 
 async function _exploreOverpassFallback(pos, range) {
@@ -2924,6 +2939,7 @@ function cancelPreview() {
   document.getElementById('rp-route-wx').style.display     = 'none';
   document.getElementById('rp-parking').style.display      = 'none';
   document.getElementById('rp-highlights').style.display   = 'none';
+  document.getElementById('rp-rest').style.display         = 'none';
   document.getElementById('explore-btn').style.display     = 'flex';
   if (!navSteps.length) {
     document.getElementById('map-search').style.display = 'flex';
@@ -2967,6 +2983,50 @@ async function fetchWikiSummary(name) {
     document.getElementById('rp-wiki').textContent  = text + (d.extract.length > 180 ? '…' : '');
     document.getElementById('rp-wiki').style.display = 'block';
   } catch(_) {}
+}
+
+// ── SOSTE RISTORO ─────────────────────────────────────────────
+const REST_ICO = { cafe:'☕', restaurant:'🍽', bar:'🍺', hotel:'🏨', motel:'🏨', hostel:'🏨', default:'🛑' };
+
+async function fetchRestStops(routeCoords, durationSecs) {
+  if (durationSecs < 7200) return; // < 2h: nessuna sosta
+  const numStops = durationSecs > 14400 ? 2 : 1;
+  const fracs = numStops === 1 ? [0.5] : [0.33, 0.66];
+  const results = [];
+  for (const f of fracs) {
+    const [lng, lat] = routeCoords[Math.floor(f * (routeCoords.length - 1))];
+    const query = `[out:json][timeout:10];(
+      node["amenity"="cafe"]["name"](around:4000,${lat},${lng});
+      node["amenity"="restaurant"]["name"](around:4000,${lat},${lng});
+      node["amenity"="bar"]["name"](around:4000,${lat},${lng});
+      node["tourism"="hotel"]["name"](around:4000,${lat},${lng});
+    );out body 8;`;
+    try {
+      const d = await (await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query })).json();
+      const best = (d.elements || [])
+        .filter(e => e.tags?.name)
+        .sort((a,b) => (b.tags?.amenity==='restaurant'?1:0)-(a.tags?.amenity==='restaurant'?1:0))[0];
+      if (best) {
+        const type = best.tags?.amenity || best.tags?.tourism || 'default';
+        const dist = userPos ? Math.round(haversine(userPos, [best.lon, best.lat])) : null;
+        results.push({ lat:best.lat, lng:best.lon, name:best.tags.name, type, dist });
+      }
+    } catch(_) {}
+  }
+  if (!results.length) return;
+  const list = document.getElementById('rp-rest-list');
+  list.innerHTML = results.map((r, i) => {
+    const km = r.dist ? (r.dist >= 1000 ? (r.dist/1000).toFixed(0)+'km dal via' : r.dist+'m dal via') : '';
+    const label = numStops > 1 ? (i===0 ? '· Metà percorso' : '· Ultimo tratto') : '· Metà percorso';
+    return `<div class="rp-rest-item">
+      <div class="rp-rest-ico">${REST_ICO[r.type]||REST_ICO.default}</div>
+      <div>
+        <div class="rp-rest-name">${r.name}</div>
+        <div class="rp-rest-meta">${label}${km?' · '+km:''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('rp-rest').style.display = 'block';
 }
 
 // ── BENZINAI VICINI ───────────────────────────────────────────
