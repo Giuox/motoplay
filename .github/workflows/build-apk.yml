@@ -25,31 +25,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "platform-tools"
 
       - name: Install Node dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Generate icons
         run: python3 create_icons.py
 
       - name: Create config.js
-        run: |
-          cat > config.js << 'EOF'
-          window.MOTOPLAY = {
-            MAPBOX_TOKEN:      '${{ secrets.MAPBOX_TOKEN }}',
-            SPOTIFY_CLIENT_ID: '${{ secrets.SPOTIFY_CLIENT_ID }}',
-            OPENWEATHER_KEY:   '${{ secrets.OPENWEATHER_KEY }}',
-            SOS_CONTACT:       '${{ secrets.SOS_CONTACT }}',
-            REDIRECT_URI:      'com.motoplay.app://callback',
-            SPOTIFY_SCOPES: [
-              'streaming','user-read-email','user-read-private',
-              'user-read-playback-state','user-modify-playback-state',
-              'user-read-currently-playing',
-            ].join(' '),
-          };
-          EOF
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          OPENWEATHER_KEY: ${{ secrets.OPENWEATHER_KEY }}
+          SOS_CONTACT: ${{ secrets.SOS_CONTACT }}
+          REDIRECT_URI: com.motoplay.app://callback
+        run: node build.js
 
       - name: Prepare www/
         run: node scripts/prepare-www.js
