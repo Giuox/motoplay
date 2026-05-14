@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\Gio\\\\Downloads\\\\motoplay\\\\index.html\" | Measure-Object -Line\\).Lines)",
+      "Bash(npm install *)",
+      "Bash(python *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
+    ]
+  }
+}

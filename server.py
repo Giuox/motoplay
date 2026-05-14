@@ -229,11 +229,24 @@ async def static_handler(request):
     return web.FileResponse(ROOT / 'index.html')  # SPA fallback
 
 
+# ─── iPhone Shortcuts endpoint ───────────────────────────────
+async def iphone_handler(request):
+    try:
+        data = await request.json()
+    except Exception:
+        return web.Response(status=400, text='bad json')
+    event = data.get('event', '?')
+    log.info(f"iPhone: {event}")
+    await broadcast({'type': 'iphone', **data})
+    return web.json_response({'ok': True})
+
+
 # ─── App setup ────────────────────────────────────────────────
 app = web.Application()
-app.router.add_get('/ws',         ws_handler)
-app.router.add_get('/',           index_handler)
-app.router.add_get('/{path:.+}',  static_handler)
+app.router.add_get('/ws',              ws_handler)
+app.router.add_post('/api/iphone',     iphone_handler)
+app.router.add_get('/',                index_handler)
+app.router.add_get('/{path:.+}',       static_handler)
 
 
 async def on_startup(a):

@@ -1089,9 +1089,9 @@ input[type=range]::-webkit-slider-thumb{
       <div class="vtag">Messaggi</div>
       <div class="msg-w">⚠ SOLA LETTURA — non rispondere durante la guida</div>
       <div class="msg-list" id="msg-list">
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;opacity:.35;padding:20px">
+        <div class="msg-empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;opacity:.35;padding:20px">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <p style="font-family:var(--fd);font-size:11px;letter-spacing:.15em;text-align:center;line-height:1.7">Nessun messaggio<br><span style="font-size:9px;opacity:.7">Le notifiche arriveranno qui<br>quando installato sul Raspberry Pi</span></p>
+          <p style="font-family:var(--fd);font-size:11px;letter-spacing:.15em;text-align:center;line-height:1.7">Nessun messaggio<br><span style="font-size:9px;opacity:.7">Configura iOS Shortcuts<br>in Impostazioni → iPhone</span></p>
         </div>
       </div>
     </div>
@@ -1131,16 +1131,40 @@ input[type=range]::-webkit-slider-thumb{
         <div class="si" style="font-size:11px"><span>Come usare SOS</span><span style="color:var(--text2)">Tieni premuto 3s</span></div>
       </div>
       <div class="sg">
-        <div class="sg-t">iPhone / iOS</div>
-        <div class="ios-box">
-          <h4>COLLEGAMENTO iOS</h4>
-          <ul>
-            <li><b>Audio:</b> AirPlay dal Centro di Controllo iPhone</li>
-            <li><b>Spotify:</b> OAuth nel tab Musica</li>
-            <li><b>Bluetooth:</b> Chrome desktop/Android (non Safari iOS)</li>
-            <li><b>CarPlay nativo:</b> richiede OpenAuto Pro su Raspberry Pi</li>
-          </ul>
+        <div class="sg-t">iPhone / iOS Shortcuts</div>
+        <div class="sr sl" style="flex-direction:column;align-items:flex-start;gap:8px">
+          <div class="sh" style="width:100%"><label>IP Server MotoPlay</label><span class="sr-v" id="srv-host-v">—</span></div>
+          <input type="text" id="srv-host-input" placeholder="192.168.x.x:8000"
+            style="background:var(--bg3,#111);border:1px solid var(--line);border-radius:8px;padding:8px 12px;
+            color:var(--text);font-family:var(--fm);font-size:12px;outline:none;width:100%;letter-spacing:.05em"
+            oninput="setSrvHost(this.value)">
+          <div style="font-size:9px;color:var(--text2);letter-spacing:.08em;line-height:1.7">
+            Inserisci l'IP del PC/Pi che esegue server.py.<br>
+            Trovi l'IP nel terminale all'avvio del server.<br>
+            <b>Su hotspot iPhone:</b> solitamente 172.20.10.1:8000
+          </div>
         </div>
+        <div class="si" style="margin-top:8px">
+          <span>URL chiamata in arrivo</span>
+          <span id="srv-call-url" style="font-family:var(--fm);font-size:9px;color:var(--accent)">—</span>
+        </div>
+        <div class="si">
+          <span>URL messaggio</span>
+          <span id="srv-msg-url" style="font-family:var(--fm);font-size:9px;color:var(--accent)">—</span>
+        </div>
+        <div style="padding:10px 14px">
+          <div style="font-size:9px;letter-spacing:.12em;color:var(--text2);margin-bottom:8px">SETUP SHORTCUTS iOS</div>
+          <div style="font-size:10px;color:var(--text2);line-height:1.9">
+            1. Apri <b>Comandi</b> su iPhone<br>
+            2. Nuova automazione → <b>Telefono</b> → Chiamata ricevuta<br>
+            3. Azione: <b>Ottieni contenuti URL</b> → metodo POST<br>
+            4. URL: l'indirizzo qui sopra · corpo JSON<br>
+            5. Crea una seconda per <b>Messaggi</b> → Messaggio ricevuto
+          </div>
+        </div>
+        <button onclick="testShortcut()" style="margin:8px 14px 4px;background:rgba(200,16,46,.1);border:1px solid rgba(200,16,46,.3);
+          border-radius:8px;color:var(--accent);padding:8px 16px;font-family:var(--fd);font-size:10px;
+          letter-spacing:.15em;cursor:pointer;font-weight:700">TEST CONNESSIONE</button>
       </div>
       <div class="sg">
         <div class="sg-t">Bluetooth Interfonico</div>
@@ -1237,6 +1261,7 @@ buildLetters(document.getElementById('sp-guzzi'), 'GUZZI', .32);
 window.addEventListener('load', () => {
   tick(); setInterval(tick, 30000);
   checkCfg();
+  initSrvHost();
   initGeo();
   initBT();
   checkSpotify();
@@ -1399,6 +1424,39 @@ function toggleTheme() {
       });
     }
   }
+}
+
+// ── SERVER HOST (per APK / connessione esterna) ───────────────
+function setSrvHost(val) {
+  const v = val.trim();
+  localStorage.setItem('mg_server_host', v || '');
+  document.getElementById('srv-host-v').textContent = v || '—';
+  const base = v ? `http://${v}` : '';
+  const el1 = document.getElementById('srv-call-url');
+  const el2 = document.getElementById('srv-msg-url');
+  if (el1) el1.textContent = base ? `${base}/api/iphone` : '—';
+  if (el2) el2.textContent = base ? `${base}/api/iphone` : '—';
+  if (v) { clearTimeout(wsRetry); wsConnect(); }
+}
+
+function initSrvHost() {
+  const v = localStorage.getItem('mg_server_host') || '';
+  const inp = document.getElementById('srv-host-input');
+  if (inp) inp.value = v;
+  setSrvHost(v);
+}
+
+async function testShortcut() {
+  const host = localStorage.getItem('mg_server_host');
+  if (!host) { alert('Inserisci prima l\'IP del server'); return; }
+  try {
+    const r = await fetch(`http://${host}/api/iphone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'message', sender: 'Test iPhone', preview: 'Connessione riuscita ✓', app: 'MotoPlay' }),
+    });
+    alert(r.ok ? 'Connessione OK — controlla il tab Messaggi' : `Errore HTTP ${r.status}`);
+  } catch(e) { alert('Server non raggiungibile: ' + e.message); }
 }
 
 // ── CONFIG ────────────────────────────────────────────────────
@@ -1764,9 +1822,10 @@ let ws = null, wsRetry = null, wsLive = false;
 
 function wsConnect() {
   if (ws?.readyState === WebSocket.OPEN) return;
-  // Usa stesso host + protocollo (wss:// su HTTPS, ws:// su HTTP)
+  const savedHost = localStorage.getItem('mg_server_host');
+  const host = savedHost || location.host;
   const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${wsProto}//${location.host}/ws`);
+  ws = new WebSocket(`${wsProto}//${host}/ws`);
 
   ws.onopen = () => {
     wsLive = true; clearTimeout(wsRetry);
@@ -1829,7 +1888,40 @@ function handleWsMsg(msg) {
     case 'call':
       handleCall(msg);
       break;
+
+    case 'iphone':
+      handleiPhone(msg);
+      break;
   }
+}
+
+function handleiPhone(msg) {
+  if (msg.event === 'call_incoming') {
+    handleCall({ state: 'incoming', name: msg.name || 'iPhone', number: msg.number || '' });
+  } else if (msg.event === 'call_ended') {
+    handleCall({ state: 'ended' });
+  } else if (msg.event === 'message') {
+    addMessage(msg);
+  }
+}
+
+function addMessage({ sender = '?', preview = '', app = 'Messaggi', time = '' }) {
+  const list = document.getElementById('msg-list');
+  const empty = list.querySelector('.msg-empty');
+  if (empty) empty.remove();
+  const t = time || new Date().toLocaleTimeString('it', { hour: '2-digit', minute: '2-digit' });
+  const item = document.createElement('div');
+  item.className = 'msg-item';
+  item.style.cssText = 'border-left-color:var(--accent)';
+  item.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-family:var(--fd);font-weight:700;font-size:13px;color:var(--text)">${sender}</span>
+      <span style="font-family:var(--fm);font-size:9px;color:var(--text2)">${t} · ${app}</span>
+    </div>
+    <div style="font-family:var(--fd);font-size:12px;color:var(--text2);line-height:1.4">${preview}</div>`;
+  list.prepend(item);
+  const badge = document.getElementById('msg-badge');
+  if (badge) { badge.style.display = 'flex'; badge.textContent = (parseInt(badge.textContent||0)+1)||1; }
 }
 
 // ── GPS dal server ────────────────────────────────────────────
