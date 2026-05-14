@@ -7,6 +7,7 @@
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#C8102E">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MotoPlay">
@@ -1035,7 +1036,7 @@ input[type=range]::-webkit-slider-thumb{
         <button class="pk" onclick="dial('0')">0</button>
         <button class="pk" onclick="dial('#')">⌗</button>
       </div>
-      <button class="call" id="call-b" onclick="simCall()">
+      <button class="call" id="call-b" onclick="makeCall()">
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 8.11a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </button>
     </div>
@@ -1248,8 +1249,14 @@ window.addEventListener('load', () => {
       document.getElementById('splash').remove();
       document.getElementById('app').classList.add('show');
       setTimeout(() => { if (!mapInit) initMap(); }, 100);
-      requestWakeLock();   // schermo sempre acceso
-      initWeather();       // avvia polling meteo
+      requestWakeLock();
+      initWeather();
+      screen.orientation?.lock('landscape').catch(() => {});
+      history.pushState(null, '', location.href);
+      window.addEventListener('popstate', () => history.pushState(null, '', location.href));
+      if (window.Capacitor?.isNativePlatform?.()) {
+        window.Capacitor.Plugins.App?.addListener('appUrlOpen', ({ url }) => _handleSpotifyDeepLink(url));
+      }
     }, 500);   // fade-out splash: 500ms (era 950ms)
   }, 1800);    // splash visibile: 1.8s (era 3.2s) — animazione finisce a ~1.9s
 });
@@ -1622,12 +1629,15 @@ function dial(k) {
   }
   dialStr+=k; document.getElementById('ph-dn').textContent=dialStr;
 }
-function simCall() {
-  if(!dialStr&&!calling) return;
-  calling=!calling;
-  const b=document.getElementById('call-b');
-  if(calling) { b.classList.add('active'); document.getElementById('ph-nm').textContent='In chiamata...'; }
-  else { b.classList.remove('active'); document.getElementById('ph-nm').textContent='Componi'; document.getElementById('ph-dn').textContent=''; dialStr=''; }
+function makeCall() {
+  if (!dialStr) return;
+  window.location.href = 'tel:' + dialStr;
+  setTimeout(() => {
+    dialStr = '';
+    document.getElementById('ph-nm').textContent = 'Componi';
+    document.getElementById('ph-dn').textContent = '';
+    document.getElementById('call-b').classList.remove('active');
+  }, 800);
 }
 
 // ── SPOTIFY PKCE ─────────────────────────────────────────────
@@ -1638,13 +1648,42 @@ function checkSpotify() {
 }
 async function connectSpotify() {
   if(!CFG.SPOTIFY_CLIENT_ID) { alert('Aggiungi SPOTIFY_CLIENT_ID in config.js'); return; }
-  if(location.protocol==='file:') { alert('OAuth richiede server locale.\nEsegui start.bat'); return; }
+  const IS_NATIVE = window.Capacitor?.isNativePlatform?.() ?? false;
+  if(!IS_NATIVE && location.protocol==='file:') { alert('OAuth richiede server locale.\nEsegui start.bat'); return; }
+  const redirectUri = IS_NATIVE ? 'com.motoplay.app://callback' : CFG.REDIRECT_URI;
   const v=rnd(64), ch=await pkce(v);
   localStorage.setItem('sp_ver',v);
   window.location.href='https://accounts.spotify.com/authorize?'+new URLSearchParams({
     response_type:'code',client_id:CFG.SPOTIFY_CLIENT_ID,scope:CFG.SPOTIFY_SCOPES,
-    redirect_uri:CFG.REDIRECT_URI,code_challenge_method:'S256',code_challenge:ch
+    redirect_uri:redirectUri,code_challenge_method:'S256',code_challenge:ch
   });
+}
+
+async function _handleSpotifyDeepLink(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== 'callback') return;
+    const code = u.searchParams.get('code');
+    const err  = u.searchParams.get('error');
+    if (err || !code) { alert('Spotify auth: ' + (err || 'nessun codice')); return; }
+    const verifier = localStorage.getItem('sp_ver');
+    if (!verifier) { alert('Sessione scaduta, riprova'); return; }
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        grant_type:'authorization_code', code,
+        redirect_uri:'com.motoplay.app://callback',
+        client_id:CFG.SPOTIFY_CLIENT_ID, code_verifier:verifier,
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const d = await res.json();
+    localStorage.setItem('sp_token',   d.access_token);
+    localStorage.setItem('sp_refresh', d.refresh_token);
+    localStorage.setItem('sp_exp',     Date.now() + d.expires_in * 1000);
+    localStorage.removeItem('sp_ver');
+    window.location.href = '/';
+  } catch(e) { alert('Spotify token error: ' + e.message.slice(0,120)); }
 }
 function showPlayer() {
   document.getElementById('sp-connect').style.display='none';
@@ -1864,7 +1903,7 @@ function updateBT(b) {
 function handleHWButton(btn) {
   if (btn === 'prev')  spPrev();
   if (btn === 'next')  spNext();
-  if (btn === 'call')  simCall();
+  if (btn === 'call')  makeCall();
 }
 
 // ── Chiamata in arrivo ────────────────────────────────────────

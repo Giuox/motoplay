@@ -1,0 +1,71 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Generate icons
+        run: python3 create_icons.py
+
+      - name: Create config.js
+        run: |
+          cat > config.js << 'EOF'
+          window.MOTOPLAY = {
+            MAPBOX_TOKEN:      '${{ secrets.MAPBOX_TOKEN }}',
+            SPOTIFY_CLIENT_ID: '${{ secrets.SPOTIFY_CLIENT_ID }}',
+            OPENWEATHER_KEY:   '${{ secrets.OPENWEATHER_KEY }}',
+            SOS_CONTACT:       '${{ secrets.SOS_CONTACT }}',
+            REDIRECT_URI:      'com.motoplay.app://callback',
+            SPOTIFY_SCOPES: [
+              'streaming','user-read-email','user-read-private',
+              'user-read-playback-state','user-modify-playback-state',
+              'user-read-currently-playing',
+            ].join(' '),
+          };
+          EOF
+
+      - name: Prepare www/
+        run: node scripts/prepare-www.js
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: motoplay-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

@@ -1,0 +1,40 @@
+{
+  "_comment": "Fully Kiosk Browser — importa da Settings > Import/Export Settings",
+  "_url_note": "Sostituisci DEPLOY_URL con il tuo dominio (es. https://motoplay.vercel.app)",
+
+  "startUrl": "https://DEPLOY_URL/",
+  "kioskMode": true,
+  "keepScreenOn": true,
+  "screenBrightness": 100,
+  "preventNavigation": true,
+  "allowedUrls": [
+    "https://DEPLOY_URL/*",
+    "https://accounts.spotify.com/*",
+    "https://DEPLOY_URL/callback.html"
+  ],
+  "allowExternalLinks": false,
+  "allowedExternalUrls": [
+    "tel:*"
+  ],
+  "showActionBar": false,
+  "showStatusBar": false,
+  "showNavigationBar": false,
+  "enableZoom": false,
+  "enableTouch": true,
+  "enableBoot": true,
+  "bootDelay": 5,
+  "powerSaveMode": false,
+  "screenOffTimer": 0,
+  "motionDetection": false,
+  "locationPermission": true,
+  "cameraPermission": false,
+  "microphonePermission": false,
+  "bluetoothPermission": true,
+  "useWideViewPort": false,
+  "loadingIndicator": false,
+  "swipeDownToRefresh": false,
+  "hardwareButtonsEnabled": false,
+  "showHomeButton": false,
+  "showReloadButton": false,
+  "injectJs": "screen.orientation?.lock('landscape').catch(()=>{});"
+}

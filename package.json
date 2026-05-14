@@ -5,7 +5,18 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
-    "start": "python server.py"
+    "start": "python server.py",
+    "prepare:www": "node scripts/prepare-www.js",
+    "build:android": "npm run prepare:www && npx cap sync android",
+    "open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
   },
   "engines": {
     "node": ">=18"

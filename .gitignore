@@ -10,6 +10,15 @@ __pycache__/
 # Node
 node_modules/
 
+# Capacitor build artifacts
+www/
+ios/
+
+# Android build outputs (non il progetto)
+android/app/build/
+android/.gradle/
+android/local.properties
+
 # Binari scaricati dal setup
 caddy.exe
 winsw.exe
@@ -21,8 +30,8 @@ MotoPlayCaddy.exe
 # macOS
 .DS_Store
 
-# Icone PWA (rigenerabili con create_icons.py)
-assets/icon-*.png
+# Icone PWA — incluse in git per build Capacitor
+# assets/icon-*.png
 
 # Brainstorming
 .superpowers/

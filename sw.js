@@ -1,4 +1,4 @@
-const CACHE = 'motoplay-v1';
+const CACHE = 'motoplay-v2';
 const SHELL = [
   '/',
   '/index.html',
