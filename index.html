@@ -511,6 +511,25 @@ input[type=range]::-webkit-slider-thumb{
 /* nasconde GPS stats di default — visibili solo fuori navigazione */
 #gps-bot{position:absolute;bottom:14px;left:14px;right:14px;z-index:20}
 
+/* ── CRASH DETECTION OVERLAY ── */
+#crash-overlay{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;
+  background:rgba(120,0,0,.96);backdrop-filter:blur(20px)}
+#crash-count{font-family:var(--fm);font-size:72px;font-weight:300;color:#fff;line-height:1}
+.crash-title{font-family:var(--fd);font-size:13px;letter-spacing:.35em;color:rgba(255,255,255,.7);text-transform:uppercase}
+.crash-msg{font-family:var(--fs);font-size:26px;font-weight:700;color:#fff;text-align:center;padding:0 24px;line-height:1.2}
+.crash-dismiss{background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.4);border-radius:40px;
+  color:#fff;padding:14px 36px;font-family:var(--fd);font-weight:700;font-size:13px;letter-spacing:.2em;
+  cursor:pointer;margin-top:8px}
+
+/* ── SPEED CAMERA BADGE ── */
+#cam-badge{
+  display:none;position:absolute;top:70px;left:14px;z-index:22;
+  background:rgba(255,140,0,.92);border:1px solid rgba(255,140,0,.4);border-radius:8px;
+  padding:6px 12px;font-family:var(--fd);font-weight:700;font-size:10px;letter-spacing:.15em;
+  color:#fff;align-items:center;gap:6px
+}
+
 /* ── ROUTE PREVIEW ── */
 #route-preview{
   position:absolute;bottom:14px;left:14px;right:14px;z-index:25;
@@ -536,6 +555,20 @@ input[type=range]::-webkit-slider-thumb{
 .rp-btn-start{flex:2;background:var(--accent);border:none;border-radius:8px;color:#fff;
   padding:10px;font-family:var(--fd);font-weight:700;font-size:12px;letter-spacing:.18em;cursor:pointer}
 
+/* ── ROUTE WEATHER STRIP ── */
+.rp-route-wx{padding:8px 16px;display:none;gap:0;border-bottom:1px solid var(--line)}
+.rwx-pt{flex:1;text-align:center;padding:4px 0}
+.rwx-pt small{font-family:var(--fd);font-size:8px;letter-spacing:.12em;color:var(--text2);display:block;margin-bottom:2px}
+.rwx-pt span{font-size:18px;display:block;line-height:1.2}
+.rwx-pt b{font-family:var(--fm);font-size:11px;color:var(--text)}
+
+/* ── PARKING SECTION IN PREVIEW ── */
+.rp-parking{padding:8px 16px 6px;display:none;border-bottom:1px solid var(--line)}
+.rp-parking-title{font-family:var(--fd);font-size:8px;letter-spacing:.18em;color:var(--text2);margin-bottom:6px}
+.rp-park-item{display:flex;justify-content:space-between;font-family:var(--fd);font-size:11px;
+  color:var(--text2);padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.rp-park-item b{color:var(--text)}
+
 /* ── GAS STATION BUTTON + MARKERS ── */
 #gas-btn{
   position:absolute;top:62px;right:14px;z-index:20;width:36px;height:36px;
@@ -544,6 +577,20 @@ input[type=range]::-webkit-slider-thumb{
   font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center
 }
 #gas-btn.active{background:rgba(68,212,120,.12);border-color:rgba(68,212,120,.35)}
+#parking-btn{
+  position:absolute;top:104px;right:14px;z-index:20;width:36px;height:36px;
+  background:rgba(10,10,10,.82);backdrop-filter:blur(12px);
+  border:1px solid var(--line);border-radius:8px;
+  font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center
+}
+#parking-btn.active{background:rgba(90,180,255,.12);border-color:rgba(90,180,255,.35)}
+#scenic-btn{
+  position:absolute;top:146px;right:14px;z-index:20;width:36px;height:36px;
+  background:rgba(10,10,10,.82);backdrop-filter:blur(12px);
+  border:1px solid var(--line);border-radius:8px;
+  font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center
+}
+#scenic-btn.active{background:rgba(200,16,46,.12);border-color:rgba(200,16,46,.35)}
 
 /* ── TEMA CHIARO (sole) ── */
 :root.light {
@@ -904,6 +951,14 @@ input[type=range]::-webkit-slider-thumb{
     <div class="sos-sub">Invio posizione GPS al contatto di emergenza</div>
   </div>
 
+  <!-- Crash Detection Overlay -->
+  <div id="crash-overlay">
+    <div class="crash-title">CADUTA RILEVATA</div>
+    <div class="crash-msg">Stai bene?<br>SOS in</div>
+    <div id="crash-count">30</div>
+    <button class="crash-dismiss" onclick="dismissCrash()">STO BENE — ANNULLA</button>
+  </div>
+
   <!-- Overlay chiamata in arrivo -->
   <div id="call-overlay" style="display:none;position:fixed;inset:0;z-index:150;
     background:rgba(3,3,3,.92);backdrop-filter:blur(20px);
@@ -980,7 +1035,14 @@ input[type=range]::-webkit-slider-thumb{
       <button id="voice-btn" class="on" onclick="toggleVoice()" title="Voce navigazione">🔊</button>
 
       <!-- Benzinai vicini -->
-      <button id="gas-btn" onclick="toggleGasStations()" title="Benzinai vicini">⛽</button>
+      <button id="gas-btn"     onclick="toggleGasStations()" title="Benzinai vicini">⛽</button>
+      <!-- Parcheggi moto -->
+      <button id="parking-btn" onclick="toggleParking()"     title="Parcheggi moto">🅿️</button>
+      <!-- Percorso panoramico -->
+      <button id="scenic-btn"  onclick="toggleScenic()"      title="Evita autostrade — percorso panoramico">🏍</button>
+
+      <!-- Speed camera badge (navigazione attiva) -->
+      <div id="cam-badge">📷 AUTOVELOX <span id="cam-dist">—</span></div>
 
       <!-- Route preview (prima di avviare navigazione) -->
       <div id="route-preview">
@@ -995,11 +1057,22 @@ input[type=range]::-webkit-slider-thumb{
           <div class="nb-sep"></div>
           <div class="rp-stat"><small>ARRIVO</small><strong id="rp-eta">—</strong></div>
         </div>
+        <div class="rp-route-wx" id="rp-route-wx">
+          <div class="rwx-pt" id="rwx-0"><small>PARTENZA</small><span>—</span><b>—</b></div>
+          <div class="nb-sep"></div>
+          <div class="rwx-pt" id="rwx-1"><small>METÀ</small><span>—</span><b>—</b></div>
+          <div class="nb-sep"></div>
+          <div class="rwx-pt" id="rwx-2"><small>ARRIVO</small><span>—</span><b>—</b></div>
+        </div>
         <div class="rp-weather" id="rp-weather">
           <div class="rp-weather-ico" id="rp-w-ico">🌡</div>
           <div class="rp-weather-info" id="rp-w-info">—</div>
         </div>
         <div class="rp-wiki" id="rp-wiki"></div>
+        <div class="rp-parking" id="rp-parking">
+          <div class="rp-parking-title">PARCHEGGI MOTO VICINI</div>
+          <div id="rp-park-list"></div>
+        </div>
         <div class="rp-btns">
           <button class="rp-btn-cancel" onclick="cancelPreview()">ANNULLA</button>
           <button class="rp-btn-start"  onclick="confirmNav()">▶ AVVIA</button>
@@ -1325,6 +1398,7 @@ window.addEventListener('load', () => {
   initSrvHost();
   initGeo();
   initBT();
+  initCrashDetection();
   checkSpotify();
   document.getElementById('srv-t').textContent =
     location.protocol === 'file:' ? 'file:// — usa start.bat' : 'localhost ✓';
@@ -1607,6 +1681,7 @@ async function initMap() {
       if (navSteps.length) {
         checkStepAdvance([lng, lat]);
         checkOffRoute([lng, lat]);
+        checkSpeedCameras([lng, lat]);
       }
     }, () => {}, { enableHighAccuracy:true, maximumAge:2000 });
   });
@@ -1987,7 +2062,7 @@ function addMessage({ sender = '?', preview = '', app = 'Messaggi', time = '' })
 
 // ── GPS dal server ────────────────────────────────────────────
 function updateGPS(g) {
-  if (g.sim) return; // PC: ignora tutto, nessun dato simulato sulla UI
+  if (g.sim) return;
   // GPS reale (Raspberry Pi con hardware)
   userPos = [g.lng, g.lat];
   if (map) {
@@ -2000,6 +2075,7 @@ function updateGPS(g) {
   if (navSteps.length) {
     checkStepAdvance([g.lng, g.lat]);
     checkOffRoute([g.lng, g.lat]);
+    checkSpeedCameras([g.lng, g.lat]);
   }
 }
 
@@ -2356,14 +2432,16 @@ async function startNav(origin, dest, destName, preview = false) {
   if (!CFG.MAPBOX_TOKEN || !map) return;
   window._destCoords = dest;
   window._destName   = destName;
+  const params = {
+    access_token: CFG.MAPBOX_TOKEN,
+    geometries:   'geojson',
+    steps:        true,
+    language:     'it',
+    overview:     'full',
+  };
+  if (_scenicMode) params.exclude = 'motorway,toll,ferry';
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin[0]},${origin[1]};${dest[0]},${dest[1]}?`+
-    new URLSearchParams({
-      access_token: CFG.MAPBOX_TOKEN,
-      geometries:   'geojson',
-      steps:        true,
-      language:     'it',
-      overview:     'full',
-    });
+    new URLSearchParams(params);
   try {
     const r = await fetch(url);
     const d = await r.json();
@@ -2414,9 +2492,13 @@ async function startNav(origin, dest, destName, preview = false) {
       document.getElementById('map-search').style.display    = 'none';
       document.getElementById('route-preview').style.display = 'flex';
       document.getElementById('gps-bot').style.display       = 'none';
-      // Fetch meteo + wiki in parallelo (non bloccante)
+      // Fetch async in parallelo
       fetchDestWeather(dest[1], dest[0]);
       fetchWikiSummary(destName.split(',')[0].trim());
+      fetchRouteWeather(route.geometry.coordinates);
+      fetchParkingForDest(dest);
+      // Carica autovelox sul percorso
+      if (map.getBounds) loadSpeedCameras(map.getBounds());
       return;
     }
 
@@ -2531,6 +2613,8 @@ function stopNav() {
   navSteps = []; navIdx = 0;
   clearTimeout(_rerouteTimer); _rerouteTimer = null;
   window._destCoords = null; window._destName = null;
+  _speedCameras = [];
+  document.getElementById('cam-badge').style.display = 'none';
 
   if (map) {
     ['route-line','route-case'].forEach(id => {
@@ -2581,9 +2665,11 @@ function confirmNav() {
 
 function cancelPreview() {
   window._previewRoute = null;
-  document.getElementById('route-preview').style.display = 'none';
-  document.getElementById('rp-weather').style.display    = 'none';
-  document.getElementById('rp-wiki').style.display       = 'none';
+  document.getElementById('route-preview').style.display   = 'none';
+  document.getElementById('rp-weather').style.display      = 'none';
+  document.getElementById('rp-wiki').style.display         = 'none';
+  document.getElementById('rp-route-wx').style.display     = 'none';
+  document.getElementById('rp-parking').style.display      = 'none';
   if (!navSteps.length) {
     document.getElementById('map-search').style.display = 'flex';
     document.getElementById('gps-bot').style.display    = 'flex';
@@ -2671,6 +2757,180 @@ async function toggleGasStations() {
 function clearGasMarkers() {
   _gasMarkers.forEach(m => m.remove());
   _gasMarkers = [];
+}
+
+// ── PARCHEGGI MOTO ────────────────────────────────────────────
+let _parkMarkers = [], _parkActive = false;
+
+async function toggleParking() {
+  const btn = document.getElementById('parking-btn');
+  if (_parkActive) {
+    _parkMarkers.forEach(m => m.remove()); _parkMarkers = []; _parkActive = false;
+    btn.classList.remove('active'); return;
+  }
+  if (!map) return;
+  const pos = userPos || [map.getCenter().lng, map.getCenter().lat];
+  btn.textContent = '⏳';
+  try {
+    const query = `[out:json][timeout:12];node["amenity"="motorcycle_parking"](around:3000,${pos[1]},${pos[0]});out body;`;
+    const d = await (await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query })).json();
+    _parkMarkers.forEach(m => m.remove()); _parkMarkers = [];
+    (d.elements || []).slice(0,15).forEach(n => {
+      const el = Object.assign(document.createElement('div'), {
+        style:'width:22px;height:22px;border-radius:6px;background:#1040A0;border:2px solid #5AB4FF;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;box-shadow:0 0 0 4px rgba(90,180,255,.15)'
+      });
+      el.textContent = '🅿';
+      const dist = Math.round(haversine(pos, [n.lon, n.lat]));
+      const cap = n.tags?.capacity ? ` · ${n.tags.capacity} posti` : '';
+      const popup = new mapboxgl.Popup({ offset:12, closeButton:false })
+        .setHTML(`<div style="font-family:sans-serif;font-size:11px;color:#fff;background:#111;padding:6px 8px;border-radius:6px"><b>${n.tags?.name||'Parcheggio moto'}</b><br>${dist<1000?dist+'m':(dist/1000).toFixed(1)+'km'}${cap}</div>`);
+      _parkMarkers.push(new mapboxgl.Marker({ element:el }).setLngLat([n.lon,n.lat]).setPopup(popup).addTo(map));
+    });
+    _parkActive = true; btn.textContent = '🅿️'; btn.classList.add('active');
+    if (!d.elements?.length) alert('Nessun parcheggio moto trovato entro 3 km');
+  } catch(e) { btn.textContent = '🅿️'; alert('Errore: '+e.message); }
+}
+
+async function fetchParkingForDest(dest) {
+  try {
+    const query = `[out:json][timeout:10];node["amenity"="motorcycle_parking"](around:1500,${dest[1]},${dest[0]});out body;`;
+    const d = await (await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query })).json();
+    const nodes = (d.elements || []).slice(0, 4);
+    if (!nodes.length) return;
+    const list = document.getElementById('rp-park-list');
+    list.innerHTML = nodes.map(n => {
+      const dist = Math.round(haversine(dest, [n.lon, n.lat]));
+      const cap = n.tags?.capacity ? `${n.tags.capacity} posti` : 'capacità n.d.';
+      return `<div class="rp-park-item"><b>${n.tags?.name||'Parcheggio moto'}</b><span>${dist<1000?dist+'m':(dist/1000).toFixed(1)+'km'} · ${cap}</span></div>`;
+    }).join('');
+    document.getElementById('rp-parking').style.display = 'block';
+  } catch(_) {}
+}
+
+// ── PERCORSO PANORAMICO ───────────────────────────────────────
+let _scenicMode = false;
+function toggleScenic() {
+  _scenicMode = !_scenicMode;
+  document.getElementById('scenic-btn').classList.toggle('active', _scenicMode);
+  document.getElementById('scenic-btn').title = _scenicMode ? 'Modalità panoramica ON — evita autostrade' : 'Evita autostrade — percorso panoramico';
+  speak(_scenicMode ? 'Modalità panoramica attiva' : 'Modalità standard attiva');
+}
+
+// ── METEO LUNGO PERCORSO ──────────────────────────────────────
+async function fetchRouteWeather(coordinates) {
+  if (!CFG.OPENWEATHER_KEY || coordinates.length < 2) return;
+  const idxs = [0, Math.floor(coordinates.length * 0.5), coordinates.length - 1];
+  const labels = ['PARTENZA', 'METÀ', 'ARRIVO'];
+  const emoMap = { '01':'☀️','02':'⛅','03':'☁️','04':'☁️','09':'🌧','10':'🌦','11':'⛈','13':'❄️','50':'🌫' };
+  try {
+    const results = await Promise.all(idxs.map(async (i, j) => {
+      const [lng, lat] = coordinates[i];
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${CFG.OPENWEATHER_KEY}&units=metric&lang=it`;
+      const d = await (await fetch(url)).json();
+      return { label: labels[j], temp: Math.round(d.main?.temp ?? 0), icon: d.weather?.[0]?.icon || '01', desc: d.weather?.[0]?.description || '' };
+    }));
+    results.forEach((r, i) => {
+      const el = document.getElementById(`rwx-${i}`);
+      if (!el) return;
+      el.innerHTML = `<small>${r.label}</small><span>${emoMap[r.icon.slice(0,2)]||'🌡'}</span><b>${r.temp}°</b>`;
+    });
+    document.getElementById('rp-route-wx').style.display = 'flex';
+  } catch(_) {}
+}
+
+// ── AUTOVELOX (SPEED CAMERAS) ─────────────────────────────────
+let _speedCameras = [], _lastCamAlert = 0;
+
+async function loadSpeedCameras(bounds) {
+  try {
+    const { _sw, _ne } = bounds;
+    const query = `[out:json][timeout:15];(node["highway"="speed_camera"](${_sw.lat},${_sw.lng},${_ne.lat},${_ne.lng});node["enforcement"="maxspeed"](${_sw.lat},${_sw.lng},${_ne.lat},${_ne.lng}););out body;`;
+    const d = await (await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:query })).json();
+    _speedCameras = (d.elements || []).map(n => [n.lon, n.lat]);
+    if (_speedCameras.length) speak(`${_speedCameras.length} autovelox rilevati sul percorso`);
+  } catch(_) {}
+}
+
+function checkSpeedCameras(pos) {
+  if (!_speedCameras.length || !navSteps.length) return;
+  const now = Date.now();
+  if (now - _lastCamAlert < 8000) return;
+  for (const cam of _speedCameras) {
+    const d = haversine(pos, cam);
+    if (d < 500 && d > 20) {
+      _lastCamAlert = now;
+      const badge = document.getElementById('cam-badge');
+      document.getElementById('cam-dist').textContent = Math.round(d) + 'm';
+      badge.style.display = 'flex';
+      speak(`Attenzione, autovelox tra ${Math.round(d)} metri`);
+      setTimeout(() => { badge.style.display = 'none'; }, 10000);
+      return;
+    }
+  }
+}
+
+// ── CRASH DETECTION ───────────────────────────────────────────
+let _crashTimer = null, _crashCountdown = 30, _crashMonitoring = false;
+
+function initCrashDetection() {
+  if (!window.DeviceMotionEvent) return;
+  if (typeof DeviceMotionEvent.requestPermission === 'function') {
+    // iOS 13+ — richiediamo al primo tap utente
+    document.addEventListener('click', async function askOnce() {
+      try { const s = await DeviceMotionEvent.requestPermission(); if (s==='granted') startCrashMonitor(); }
+      catch(_) {}
+      document.removeEventListener('click', askOnce);
+    }, { once: true });
+  } else {
+    startCrashMonitor();
+  }
+}
+
+function startCrashMonitor() {
+  if (_crashMonitoring) return;
+  _crashMonitoring = true;
+  let _lastHit = 0;
+  window.addEventListener('devicemotion', e => {
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    const mag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+    const now = Date.now();
+    if (mag > 49 && now - _lastHit > 6000) { // >5g = 49 m/s²
+      _lastHit = now;
+      handleCrashAlert();
+    }
+  });
+}
+
+function handleCrashAlert() {
+  if (document.getElementById('crash-overlay').style.display === 'flex') return;
+  speak('Caduta rilevata. Premi annulla se stai bene.');
+  _crashCountdown = 30;
+  document.getElementById('crash-count').textContent = '30';
+  document.getElementById('crash-overlay').style.display = 'flex';
+  const tick = () => {
+    _crashCountdown--;
+    document.getElementById('crash-count').textContent = _crashCountdown;
+    if (_crashCountdown <= 0) { triggerSOS(); return; }
+    _crashTimer = setTimeout(tick, 1000);
+  };
+  _crashTimer = setTimeout(tick, 1000);
+}
+
+function dismissCrash() {
+  clearTimeout(_crashTimer); _crashTimer = null;
+  document.getElementById('crash-overlay').style.display = 'none';
+  speak('Allarme annullato. Buona guida.');
+}
+
+function triggerSOS() {
+  clearTimeout(_crashTimer);
+  document.getElementById('crash-overlay').style.display = 'none';
+  const contact = localStorage.getItem('mg_sos_contact') || CFG.SOS_CONTACT || '';
+  if (!contact) { alert('Contatto SOS non configurato in Impostazioni'); return; }
+  const gps = userPos ? `https://maps.google.com/?q=${userPos[1]},${userPos[0]}` : 'GPS non disponibile';
+  const body = encodeURIComponent(`🆘 SOS MotoPlay: possibile caduta. Posizione: ${gps}`);
+  window.location.href = `sms:${contact}?body=${body}`;
 }
 
 // ── BACKGROUND THEMES ─────────────────────────────────────────
