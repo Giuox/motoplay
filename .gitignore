@@ -25,7 +25,8 @@ winsw.exe
 nssm.exe
 MotoPlay.exe
 MotoPlayCaddy.exe
-*.xml
+winsw.xml
+nssm.xml
 
 # macOS
 .DS_Store
