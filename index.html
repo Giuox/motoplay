@@ -527,7 +527,7 @@ input[type=range]::-webkit-slider-thumb{
   background:rgba(3,3,3,.92);backdrop-filter:blur(24px);padding:24px
 }
 .em-title{font-family:var(--fs);font-size:22px;font-weight:700;color:var(--text);margin-bottom:6px;text-align:center}
-.em-sub{font-family:var(--fd);font-size:10px;letter-spacing:.2em;color:var(--text2);margin-bottom:28px;text-align:center}
+.em-sub{font-family:var(--fd);font-size:10px;letter-spacing:.2em;color:rgba(255,255,255,.45);margin-bottom:28px;text-align:center}
 .em-cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px}
 .em-card{
   background:var(--s2);border:1px solid var(--line);border-radius:14px;
@@ -535,7 +535,7 @@ input[type=range]::-webkit-slider-thumb{
 }
 .em-card:active,.em-card:hover{border-color:var(--accent);background:rgba(200,16,46,.08)}
 .em-card-title{font-family:var(--fs);font-size:17px;font-weight:700;color:var(--text);margin-bottom:3px}
-.em-card-sub{font-family:var(--fd);font-size:10px;color:var(--text2);letter-spacing:.1em}
+.em-card-sub{font-family:var(--fd);font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.1em}
 .em-card-meta{font-family:var(--fm);font-size:9px;color:var(--accent);margin-top:6px;letter-spacing:.08em}
 .em-close{margin-top:24px;background:none;border:1px solid var(--line);border-radius:20px;
   color:var(--text2);padding:9px 24px;font-family:var(--fd);font-size:10px;letter-spacing:.15em;cursor:pointer}
@@ -546,7 +546,7 @@ input[type=range]::-webkit-slider-thumb{
 }
 .el-spin{width:40px;height:40px;border:2px solid var(--line);border-top-color:var(--accent);
   border-radius:50%;animation:s .7s linear infinite}
-.el-msg{font-family:var(--fd);font-size:11px;letter-spacing:.2em;color:var(--text2)}
+.el-msg{font-family:var(--fd);font-size:11px;letter-spacing:.2em;color:rgba(255,255,255,.55)}
 
 /* ── CRASH DETECTION OVERLAY ── */
 #crash-overlay{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;
@@ -576,18 +576,18 @@ input[type=range]::-webkit-slider-thumb{
 }
 .rp-head{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
 .rp-dest{font-family:var(--fs);font-weight:700;font-size:16px;color:var(--text);line-height:1.2;margin-bottom:2px}
-.rp-sub{font-family:var(--fd);font-size:9px;letter-spacing:.15em;color:var(--text2)}
+.rp-sub{font-family:var(--fd);font-size:9px;letter-spacing:.15em;color:rgba(255,255,255,.5)}
 .rp-stats{display:flex;padding:10px 16px;gap:0;border-bottom:1px solid var(--line)}
 .rp-stat{flex:1;text-align:center}
-.rp-stat small{font-family:var(--fd);font-weight:700;font-size:8px;letter-spacing:.18em;color:var(--text2);display:block;margin-bottom:3px}
-.rp-stat strong{font-family:var(--fm);font-size:18px;font-weight:300;color:var(--text);line-height:1}
+.rp-stat small{font-family:var(--fd);font-weight:700;font-size:8px;letter-spacing:.18em;color:rgba(255,255,255,.4);display:block;margin-bottom:3px}
+.rp-stat strong{font-family:var(--fm);font-size:18px;font-weight:300;color:#fff;line-height:1}
 .rp-weather{padding:8px 16px;display:none;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
 .rp-weather-ico{font-size:22px;flex-shrink:0}
-.rp-weather-info{font-family:var(--fd);font-size:11px;color:var(--text2);line-height:1.5}
-.rp-weather-info strong{color:var(--text);font-size:13px}
-.rp-wiki{padding:8px 16px 10px;display:none;font-family:var(--fd);font-size:10px;color:var(--text2);line-height:1.6;letter-spacing:.03em;border-bottom:1px solid var(--line)}
+.rp-weather-info{font-family:var(--fd);font-size:11px;color:rgba(255,255,255,.6);line-height:1.5}
+.rp-weather-info strong{color:#fff;font-size:13px}
+.rp-wiki{padding:8px 16px 10px;display:none;font-family:var(--fd);font-size:10px;color:rgba(255,255,255,.58);line-height:1.6;letter-spacing:.03em;border-bottom:1px solid var(--line)}
 .rp-btns{display:flex;gap:10px;padding:10px 12px}
-.rp-btn-cancel{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;color:var(--text2);
+.rp-btn-cancel{flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:rgba(255,255,255,.6);
   padding:10px;font-family:var(--fd);font-weight:700;font-size:11px;letter-spacing:.15em;cursor:pointer}
 .rp-btn-start{flex:2;background:var(--accent);border:none;border-radius:8px;color:#fff;
   padding:10px;font-family:var(--fd);font-weight:700;font-size:12px;letter-spacing:.18em;cursor:pointer}
@@ -595,16 +595,16 @@ input[type=range]::-webkit-slider-thumb{
 /* ── ROUTE WEATHER STRIP ── */
 .rp-route-wx{padding:8px 16px;display:none;gap:0;border-bottom:1px solid var(--line)}
 .rwx-pt{flex:1;text-align:center;padding:4px 0}
-.rwx-pt small{font-family:var(--fd);font-size:8px;letter-spacing:.12em;color:var(--text2);display:block;margin-bottom:2px}
+.rwx-pt small{font-family:var(--fd);font-size:8px;letter-spacing:.12em;color:rgba(255,255,255,.4);display:block;margin-bottom:2px}
 .rwx-pt span{font-size:18px;display:block;line-height:1.2}
-.rwx-pt b{font-family:var(--fm);font-size:11px;color:var(--text)}
+.rwx-pt b{font-family:var(--fm);font-size:11px;color:#fff}
 
 /* ── PARKING SECTION IN PREVIEW ── */
 .rp-parking{padding:8px 16px 6px;display:none;border-bottom:1px solid var(--line)}
-.rp-parking-title{font-family:var(--fd);font-size:8px;letter-spacing:.18em;color:var(--text2);margin-bottom:6px}
+.rp-parking-title{font-family:var(--fd);font-size:8px;letter-spacing:.18em;color:rgba(255,255,255,.4);margin-bottom:6px}
 .rp-park-item{display:flex;justify-content:space-between;font-family:var(--fd);font-size:11px;
-  color:var(--text2);padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.rp-park-item b{color:var(--text)}
+  color:rgba(255,255,255,.55);padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.rp-park-item b{color:#fff}
 
 /* ── GAS STATION BUTTON + MARKERS ── */
 #gas-btn{
